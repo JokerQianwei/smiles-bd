@@ -3,7 +3,7 @@
 paths:
   train_path: ./examples/toy_data/train.txt
   valid_path: ./examples/toy_data/valid.txt
-  vocab_path: ./examples/toy_vocab.txt
+  vocab_path: ./vocab.txt
   save_dir: ./checkpoints
 
 model:

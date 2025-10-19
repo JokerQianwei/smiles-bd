@@ -1,7 +1,8 @@
 
 # SMILES Block Diffusion – Minimal Codebase (v4)
 
-> **这版修复点**：彻底清掉所有 `...` 占位/截断；示例数据不再含省略号；Tokenizer/训练/采样/配置/测试全量实现；增加 `pyproject.toml` 便于 `pip install -e .`。  
+> 任务：把同指纹/同性质簇内的多条 SMILES 串接成定长 1024 的长序列，用 离散扩散范式（选 MDLM：DiT + SUBS + semi-AR）在整段做 掩码→还原 学习。
+> 采样：把 A 放在序列最前面作为前缀并保持不被改写，对其后的 [MASK] 位置扩散还原，按 [EOS] 切分出若干候选 SMILES，期望与 A 性质相近。
 > 训练目标=**MDLM（SUBS）** 的简化 NELBO，只在**被遮蔽位**计交叉熵并乘 \( \alpha'(t)/(1-\alpha_t) \)；采样**never‑remask** + **前缀冻结**（论文附录 B.3，式(19)）。 fileciteturn0file0
 
 ## 目录
