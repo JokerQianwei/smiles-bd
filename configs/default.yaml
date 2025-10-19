@@ -1,0 +1,30 @@
+
+# Unified configuration for SMILES Block-Diffusion (v4)
+paths:
+  train_path: ./examples/toy_data/train.txt
+  valid_path: ./examples/toy_data/valid.txt
+  vocab_path: ./examples/toy_vocab.txt
+  save_dir: ./checkpoints
+
+model:
+  max_len: 1024
+  d_model: 512
+  n_heads: 8
+  n_layers: 8
+  dropout: 0.1
+  tie_weights: true
+
+train:
+  epochs: 1
+  batch_size: 4
+  lr: 3.0e-4
+  beta: 0.3
+  omega: 0.8
+  grad_clip: 1.0
+  num_workers: 0
+  device: auto
+
+sample:
+  steps: 24
+  top_p: 0.9
+  device: auto
