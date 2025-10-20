@@ -3,3 +3,4 @@
 src/smiles_bd.egg-info
 *.pt
 src/.DS_Store
+/data

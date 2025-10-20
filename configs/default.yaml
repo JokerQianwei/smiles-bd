@@ -1,21 +1,21 @@
 
 # Unified configuration for SMILES Block-Diffusion (v4)
 paths:
-  train_path: ./data/tiny-pubchem-smiles/train-00000-of-00001.parquet
-  valid_path: ./data/tiny-pubchem-smiles/validation-00000-of-00001.parquet
+  train_path: ./data/DrugLikeSMILSE-debug/train
+  valid_path: ./data/DrugLikeSMILSE-debug/validation
   vocab_path: ./vocab.txt
   save_dir: ./checkpoints
 
 model:
   max_len: 64 # 1024
-  d_model: 512  # 词嵌入纬度
-  n_heads: 8
-  n_layers: 8
+  d_model: 768 # 词嵌入纬度
+  n_heads: 12
+  n_layers: 12
   dropout: 0.1
   tie_weights: true
 
 train:
-  epochs: 100
+  epochs: 50
   batch_size: 50
   lr: 3.0e-4
   beta: 0.3
