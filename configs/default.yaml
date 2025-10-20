@@ -15,8 +15,8 @@ model:
   tie_weights: true
 
 train:
-  epochs: 1
-  batch_size: 4
+  epochs: 100
+  batch_size: 50
   lr: 3.0e-4
   beta: 0.3
   omega: 0.8
