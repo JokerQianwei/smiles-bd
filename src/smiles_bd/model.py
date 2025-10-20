@@ -22,7 +22,7 @@ class TransformerDenoiser(nn.Module):
         )
         self.encoder = nn.TransformerEncoder(enc_layer, num_layers=n_layers)
         self.lm_head = nn.Linear(d_model, vocab_size, bias=False)
-        if tie_weights: self.lm_head.weight = self.token_emb.weight
+        if tie_weights: self.lm_head.weight = self.token_emb.weight  # 权重绑定，强制输出层的权重矩阵和输入层的权重矩阵使用同一个矩阵。大幅减少模型参数量
 
     def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor=None):
         x = self.pos(self.token_emb(input_ids))
