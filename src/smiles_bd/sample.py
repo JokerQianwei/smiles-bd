@@ -30,8 +30,9 @@ def main():
     diffuser = MaskedDiffusion(model, tok, schedule,
         pad_token_id=tok.pad_token_id, mask_token_id=tok.mask_token_id, sep_token_id=tok.sep_token_id,
         max_len=cfg["model"]["max_len"])
-    diffuser.to(device).eval()
     load_checkpoint(diffuser, args.ckpt, map_location=device)
+    diffuser.to(device).eval()
+
 
     # 前缀 A：建议自行在末尾拼上 [SEP]
     prefix_txt = args.prefix
