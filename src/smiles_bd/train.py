@@ -57,6 +57,9 @@ def main():
         pad_token_id=tok.pad_token_id, mask_token_id=tok.mask_token_id, sep_token_id=tok.sep_token_id,
         max_len=cfg["model"]["max_len"]).to(device)
 
+    total_params = sum(p.numel() for p in diffuser.parameters())
+    print(f"Total Model parameters: {total_params:,} (~{total_params/1e6:.2f}M)")
+
     optimizer = optim.AdamW(diffuser.parameters(), lr=cfg["train"]["lr"])
     for epoch in range(1, cfg["train"]["epochs"]+1):
         for step, batch in enumerate(train_loader, 1):

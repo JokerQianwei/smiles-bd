@@ -16,7 +16,7 @@ model:
 
 train:
   epochs: 50
-  batch_size: 50
+  batch_size: 280
   lr: 3.0e-4
   beta: 0.3
   omega: 0.8
