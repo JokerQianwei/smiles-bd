@@ -6,24 +6,24 @@
 本仓库是从 *Block Diffusion* 思想中**抽取并重构**的极简实现，专为上面的化学任务而裁剪：
 - 仅保留 **整段（block_size = model.length）** 的 masked diffusion 训练与**前缀填充**采样；
 - **不注入**任何特殊符号，也**不 wrap/切块**；数据应当已经按 `smiles-A [EOS] smiles-A' [EOS] ... [PAD] ...` 处理为 **1024** 长度；
-- 直接使用你提供的 `vocab.txt`（SMILES 词表）与 regex 分词器。
+- 直接使用提供的 `vocab.txt`（SMILES 词表）与 regex 分词器。
 
 与原论文/代码库的关系与取舍
 ----------------------------
 
-- 我们遵循 *Block Diffusion Language Models (BD3-LMs)* 的**整段**设定（把 block size 设为上下文长度），训练目标采用其在 **附录 B.3** 给出的**简化 NELBO**：只对被掩码的位置做交叉熵，并使用随时间的权重（等价于 α'(t)/(1-α_t) 的比例因子）以贴近理论推导。参见论文 *Eq. (19)* 与算法 1/2 的思路（训练/采样），以及 **“clipped schedule”** 降低方差的建议（Sec. 5, Tab. 2 & Fig. 2）。fileciteturn0file0  
-- 我们移除了与本任务无关的特性（多数据集封装、AR/SEDD 基线、Hydra/Lightning、大量回调、KV/FlexAttention 优化等）。在**整段**设定下，专门的块级注意力掩码退化为**标准自注意力**，因此不再需要复杂 kernel（论文 *Suppl. B.6–B.7*）fileciteturn0file0。
-- 采样使用**前缀冻结 + 迭代解码**：一次生成若干高置信 token，且**不会再重掩码**（SUBS 参数化“carry‑over unmasking”），与文献在 masked diffusion 中“已揭示 token 不再被重新遮蔽”的假设一致（附录 B.3）。fileciteturn0file0
-- 训练时使用**Clipped Linear** 噪声日程（`mask_rate ~ U[β, ω]`），依据论文对**训练方差最小化**的讨论（Sec. 5.1–5.3），默认 `β=0.3, ω=0.8`，可按需要调参。fileciteturn0file0
+- 我们遵循 *Block Diffusion Language Models (BD3-LMs)* 的**整段**设定（把 block size 设为上下文长度），训练目标采用其在 **附录 B.3** 给出的**简化 NELBO**：只对被掩码的位置做交叉熵，并使用随时间的权重（等价于 α'(t)/(1-α_t) 的比例因子）以贴近理论推导。参见论文 *Eq. (19)* 与算法 1/2 的思路（训练/采样），以及 **“clipped schedule”** 降低方差的建议（Sec. 5, Tab. 2 & Fig. 2）。 
+- 我们移除了与本任务无关的特性（多数据集封装、AR/SEDD 基线、Hydra/Lightning、大量回调、KV/FlexAttention 优化等）。在**整段**设定下，专门的块级注意力掩码退化为**标准自注意力**，因此不再需要复杂 kernel（论文 *Suppl. B.6–B.7*）。
+- 采样使用**前缀冻结 + 迭代解码**：一次生成若干高置信 token，且**不会再重掩码**（SUBS 参数化“carry‑over unmasking”），与文献在 masked diffusion 中“已揭示 token 不再被重新遮蔽”的假设一致（附录 B.3）。
+- 训练时使用**Clipped Linear** 噪声日程（`mask_rate ~ U[β, ω]`），依据论文对**训练方差最小化**的讨论（Sec. 5.1–5.3），默认 `β=0.3, ω=0.8`，可按需要调参。
 
-> 这份代码是**工程化的最小骨架**：Torch 原生实现，只有 4 个核心文件（Tokenizer / Schedule / Transformer Denoiser / Diffusion 训练&采样），便于你直接集成到现有化学工作流中。
+> 这份代码是**工程化的最小骨架**：Torch 原生实现，只有 4 个核心文件（Tokenizer / Schedule / Transformer Denoiser / Diffusion 训练&采样），便于直接集成到现有化学工作流中。
 
 ## 目录
 ```
 .
 ├─ configs/default.yaml
 ├─ examples/
-│  └─ toy_data/         # 64 长度玩具样本（无省略号）
+│  └─ toy_data/         # 64 长度玩具样本
 ├─ src/smiles_bd/
 │  ├─ tokenizer_smiles.py
 │  ├─ schedule.py
@@ -51,7 +51,7 @@ pip install -r requirements.txt
 pip install -e .   # 可选，支持 `python -m smiles_bd.train`
 ```
 
-## 数据格式（与你的前提完全一致）
+## 数据格式（提前处理）
 - 每行：`SMI_A[EOS]SMI_A'[EOS]...`，尾部用 `[PAD]` 补到 **1024**；
 - **不自动注入**任何 special token；**不 wrap/不切块**；
 - `attention_mask`==1 仅在非 `[PAD]` 处。

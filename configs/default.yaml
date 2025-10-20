@@ -20,8 +20,8 @@ train:
   lr: 3.0e-4
   beta: 0.3
   omega: 0.8
-  grad_clip: 1.0
-  num_workers: 0
+  grad_clip: 1.0  # 梯度裁剪
+  num_workers: 0  # 用多少个子进程来加载数据, 8, 16
   device: auto
 
 sample:
