@@ -26,8 +26,8 @@ class MaskedDiffusion(torch.nn.Module):
         x_in = x0.clone(); x_in[mask_pos] = self.mask_id
 
         logits = self.model(x_in, attention_mask=attn)                   # (B,L,V)
-        logits[..., self.pad_id]  = -1e9
-        logits[..., self.mask_id] = -1e9
+        logits[:, :, self.pad_id]  = -1e9
+        logits[:, :, self.mask_id] = -1e9
 
         ce = F.cross_entropy(logits.view(-1, logits.size(-1)), x0.view(-1), reduction="none").view(B,L)
         masked_loss = (ce * mask_pos.float())
@@ -41,7 +41,7 @@ class MaskedDiffusion(torch.nn.Module):
     def _nucleus_pick(self, probs_row, top_p=0.9):  # probs_row: (K,V)
         sp, si = torch.sort(probs_row, dim=-1, descending=True)
         cum = torch.cumsum(sp, dim=-1)
-        keep = cum <= top_p; keep[..., 0] = True
+        keep = cum <= top_p; keep[:, 0] = True
         sp = sp*keep; sp = sp/sp.sum(dim=-1, keepdim=True).clamp_min(1e-9)
         idx = torch.multinomial(sp, 1).squeeze(-1)
         return si.gather(1, idx.unsqueeze(-1)).squeeze(-1)              # (K,)
@@ -62,8 +62,8 @@ class MaskedDiffusion(torch.nn.Module):
         for s in range(num_steps):
             logits = self.model(x, attention_mask=attn)
             probs = torch.softmax(logits, dim=-1)
-            probs[..., self.pad_id]  = 0
-            probs[..., self.mask_id] = 0
+            probs[:, :, self.pad_id]  = 0
+            probs[:, :, self.mask_id] = 0
 
             remain = (~revealed).sum(dim=1)
             k = (remain.float() / max(1, (num_steps-s))).ceil().clamp_min(1).long()
