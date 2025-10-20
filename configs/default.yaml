@@ -7,7 +7,7 @@ paths:
   save_dir: ./checkpoints
 
 model:
-  max_len: 1024
+  max_len: 64 # 1024
   d_model: 512  # 词嵌入纬度
   n_heads: 8
   n_layers: 8
