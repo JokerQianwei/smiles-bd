@@ -4,6 +4,27 @@ import pyarrow.ipc as pa_ipc
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 
+class TextLineDataset(Dataset):
+    def __init__(self, path: str, tokenizer, max_len: int = 1024):
+        self.tok = tokenizer
+        self.max_len = max_len
+        with open(path, "r", encoding="utf-8") as f:
+            self.lines = [ln.strip() for ln in f if ln.strip()]
+
+    def __len__(self):
+        return len(self.lines)
+
+    def __getitem__(self, idx):
+        text = self.lines[idx]
+        ids = self.tok.encode(text, add_special_tokens=False,
+                              max_length=self.max_len, padding=True, truncation=True)
+        ids = torch.tensor(ids, dtype=torch.long)
+        attn = (ids != self.tok.pad_token_id).long()
+        return {"input_ids": ids, "attention_mask": attn}
+
+def _has_arrow_files(path: str) -> bool:
+    return bool(_arrow_files(path))
+
 def _arrow_files(path: str):
     """收集 .arrow 文件列表；支持目录或单文件。"""
     if os.path.isdir(path):
@@ -47,8 +68,13 @@ class ArrowDataset(Dataset):
         return {"input_ids": ids, "attention_mask": attn}
 
 def make_loaders(train_path: str, valid_path: str, tokenizer, max_len: int = 1024, batch_size: int = 2, num_workers: int = 0,):
-    train_ds = ArrowDataset(train_path, tokenizer, max_len=max_len)
-    valid_ds = ArrowDataset(valid_path, tokenizer, max_len=max_len)
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    use_arrow = _has_arrow_files(train_path)
+    if use_arrow != _has_arrow_files(valid_path):
+        raise ValueError("Train/Valid 路径数据类型不一致（一个是 Arrow，一个是文本）。")
+
+    DS = ArrowDataset if use_arrow else TextLineDataset
+    train_ds = DS(train_path, tokenizer, max_len=max_len)
+    valid_ds = DS(valid_path, tokenizer, max_len=max_len)
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  num_workers=num_workers)
     valid_loader = DataLoader(valid_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     return train_loader, valid_loader
