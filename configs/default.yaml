@@ -1,8 +1,8 @@
 
 # Unified configuration for SMILES Block-Diffusion (v4)
 paths:
-  train_path: ./examples/toy_data/train.txt
-  valid_path: ./examples/toy_data/valid.txt
+  train_path: ./data/tiny-pubchem-smiles/train-00000-of-00001.parquet
+  valid_path: ./data/tiny-pubchem-smiles/validation-00000-of-00001.parquet
   vocab_path: ./vocab.txt
   save_dir: ./checkpoints
 
@@ -21,7 +21,7 @@ train:
   beta: 0.3
   omega: 0.8
   grad_clip: 1.0  # 梯度裁剪
-  num_workers: 0  # 用多少个子进程来加载数据, 8, 16
+  num_workers: 8  # 用多少个子进程来加载数据, 8, 16
   device: auto
 
 sample:

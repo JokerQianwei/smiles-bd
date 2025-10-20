@@ -3,3 +3,4 @@ numpy
 pyyaml>=6.0
 pytest
 rdkit-pypi>=2022.9.5
+pyarrow>=14
