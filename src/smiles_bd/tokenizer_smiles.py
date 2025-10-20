@@ -17,7 +17,8 @@ class RegexSmilesTokenizer:
         self.pad_token_id  = self.vocab["[PAD]"]
         self.mask_token_id = self.vocab["[MASK]"]
         self.eos_token_id  = self.vocab["[EOS]"]
-        self.unk_token_id  = self.vocab.get("[UNK]", 0)
+        self.sep_token_id  = self.vocab["[SEP]"]
+        self.unk_token_id  = self.vocab["[UNK]"]
         self.vocab_size    = len(self.vocab)
 
     def tokenize(self, text: str) -> List[str]:

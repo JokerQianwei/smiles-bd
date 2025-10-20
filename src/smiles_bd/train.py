@@ -54,7 +54,7 @@ def main():
 
     schedule = ClippedLinearSchedule(beta=cfg["train"]["beta"], omega=cfg["train"]["omega"])
     diffuser = MaskedDiffusion(model, tok, schedule,
-        pad_token_id=tok.pad_token_id, mask_token_id=tok.mask_token_id, eos_token_id=tok.eos_token_id,
+        pad_token_id=tok.pad_token_id, mask_token_id=tok.mask_token_id, sep_token_id=tok.sep_token_id,
         max_len=cfg["model"]["max_len"]).to(device)
 
     optimizer = optim.AdamW(diffuser.parameters(), lr=cfg["train"]["lr"])

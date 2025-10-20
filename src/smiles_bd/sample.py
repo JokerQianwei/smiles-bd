@@ -28,12 +28,12 @@ def main():
     )
     schedule = ClippedLinearSchedule(beta=cfg["train"]["beta"], omega=cfg["train"]["omega"])
     diffuser = MaskedDiffusion(model, tok, schedule,
-        pad_token_id=tok.pad_token_id, mask_token_id=tok.mask_token_id, eos_token_id=tok.eos_token_id,
+        pad_token_id=tok.pad_token_id, mask_token_id=tok.mask_token_id, sep_token_id=tok.sep_token_id,
         max_len=cfg["model"]["max_len"])
     diffuser.to(device).eval()
     load_checkpoint(diffuser, args.ckpt, map_location=device)
 
-    # 前缀 A：建议自行在末尾拼上 [EOS]，或使用纯 A（看你的约定）
+    # 前缀 A：建议自行在末尾拼上 [SEP]
     prefix_txt = args.prefix
     prefix_ids = torch.tensor(tok.encode(prefix_txt, add_special_tokens=False,
                           max_length=cfg["model"]["max_len"], padding=False, truncation=True),

@@ -9,12 +9,12 @@ class TrainOutput:
     num_masked: torch.Tensor
 
 class MaskedDiffusion(torch.nn.Module):
-    def __init__(self, model, tokenizer, schedule, pad_token_id, mask_token_id, eos_token_id, max_len=1024):
+    def __init__(self, model, tokenizer, schedule, pad_token_id, mask_token_id, sep_token_id, max_len=1024):
         super().__init__()
         self.model = model
         self.tok = tokenizer
         self.schedule = schedule
-        self.pad_id, self.mask_id, self.eos_id = pad_token_id, mask_token_id, eos_token_id
+        self.pad_id, self.mask_id, self.sep_id = pad_token_id, mask_token_id, sep_token_id
         self.max_len = max_len
 
     def training_step(self, batch):
@@ -89,7 +89,7 @@ class MaskedDiffusion(torch.nn.Module):
         tail = gen[prefix_len:]
         out, cur = [], []
         for t in tail:
-            if t == self.eos_id:
+            if t == self.sep_id:
                 if cur: out.append(cur); cur = []
             elif t == self.pad_id:
                 continue

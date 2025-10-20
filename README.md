@@ -1,11 +1,11 @@
 
 # SMILES Block Diffusion – Minimal Codebase (v4)
 
-> 目标：把同指纹/同性质簇内的多条 SMILES 串接成 **定长 1024** 的长序列，在**整段**上用**离散扩散（masked diffusion, SUBS）**做“**掩码→还原**”学习；采样时把 A 放在最前作为**前缀并冻结**，对后续的 `[MASK]` 做扩散还原，并按 `[EOS]` 切出若干候选 SMILES。
+> 目标：把同指纹/同性质簇内的多条 SMILES 串接成 **定长 1024** 的长序列，在**整段**上用**离散扩散（masked diffusion, SUBS）**做“**掩码→还原**”学习；采样时把 A 放在最前作为**前缀并冻结**，对后续的 `[MASK]` 做扩散还原，并按 `[SEP]` 切出若干候选 SMILES。
 
 本仓库是从 *Block Diffusion* 思想中**抽取并重构**的极简实现，专为上面的化学任务而裁剪：
 - 仅保留 **整段（block_size = model.length）** 的 masked diffusion 训练与**前缀填充**采样；
-- **不注入**任何特殊符号，也**不 wrap/切块**；数据应当已经按 `smiles-A [EOS] smiles-A' [EOS] ... [PAD] ...` 处理为 **1024** 长度；
+- **不注入**任何特殊符号，也**不 wrap/切块**；数据应当已经按 `smiles-A [SEP] smiles-A' [SEP] ... [PAD] ...` 处理为 **1024** 长度；
 - 直接使用提供的 `vocab.txt`（SMILES 词表）与 regex 分词器。
 
 与原论文/代码库的关系与取舍
@@ -52,7 +52,7 @@ pip install -e .   # 可选，支持 `python -m smiles_bd.train`
 ```
 
 ## 数据格式（提前处理）
-- 每行：`SMI_A[EOS]SMI_A'[EOS]...`，尾部用 `[PAD]` 补到 **1024**；
+- 每行：`SMI_A[SEP]SMI_A'[SEP]...`，尾部用 `[PAD]` 补到 **1024**；
 - **不自动注入**任何 special token；**不 wrap/不切块**；
 - `attention_mask`==1 仅在非 `[PAD]` 处。
 
@@ -68,9 +68,9 @@ python -m smiles_bd.train --config ./configs/default.yaml \
 - 目标：只在被遮蔽位计交叉熵，并乘 \( \alpha′(t)/(1-α_t) \)（附录 B.3，式(19)）。
 - Checkpoint 会附带 `meta`（形状等），采样端自动匹配。
 
-> **注意**：为了保证只在真实 token 上学习，loss 仅在 `[MASK]` 位置计算；`[PAD]` 位置永远不参与。
+> **注意**：为了保证只在真实 token 上学习，loss 仅在 `[MASK]` 位置计算；`[PAD]` 位置永远不参与；训练阶段不会遮蔽分隔符 `[SEP]`。
 
-## 采样（前缀冻结 + `[EOS]` 切分）
+## 采样（前缀冻结 + `[SEP]` 切分）
 ```bash
 python -m smiles_bd.sample \
   --ckpt ./checkpoints/model.pt \
@@ -78,16 +78,16 @@ python -m smiles_bd.sample \
   --override sample.steps=32 sample.top_p=0.9 \
   --prefix "C1=CC=CC=C1"
 ```
-- 将前缀放到最前并冻结；其后初始化为 `[MASK]`，每步揭示一部分未揭示位；**禁止**生成 `[MASK]/[PAD]`；按 `[EOS]` 切候选；  
+- 将前缀放到最前并冻结；其后初始化为 `[MASK]`，每步揭示一部分未揭示位；**禁止**生成 `[MASK]/[PAD]`；按 `[SEP]` 切候选；  
 - **never‑remask** ⇒ NFEs 上界为序列长度（§6.2）。 
 - 迭代式解码：每一步在当前高置信位置解码一批 token（**不会再被重掩码**），直到没有 `[MASK]` 或达到步数。
-- 生成序列会按 `[EOS]` **切分**出多个候选 SMILES（来自与 A 同簇的长序列后缀），用于后续性质筛选。
+- 生成序列会按 `[SEP]` **切分**出多个候选 SMILES（来自与 A 同簇的长序列后缀），用于后续性质筛选。
 
 
 
 - `test_tokenizer.py`：验证 regex 分词 & vocab 装载；
 - `test_dataset.py`：验证样本加载为固定长度张量，且 attention mask 仅在非 `[PAD]` 上为 1；
-- `test_training_and_sampling.py`：跑一个最小训练步并做前缀采样，检查前缀未被篡改且能按 `[EOS]` 切分。
+- `test_training_and_sampling.py`：跑一个最小训练步并做前缀采样，检查前缀未被篡改且能按 `[SEP]` 切分。
 
 
 ## 默认配置（`configs/default.yaml`）
@@ -108,7 +108,7 @@ python -m smiles_bd.sample \
 3. **Clipped Schedule 降低方差**  
    依据论文第 5 节的分析，遮蔽比例避免极端值能显著降低 NELBO 的方差，并与困惑度相关（Tab. 2, Fig. 2）；这里默认 `U[0.3, 0.8]`，并允许你按数据特征微调。
 4. **数据面向工程**  
-   你已经把多个同簇 SMILES 串接为 1024，并用 `[EOS]`/`[PAD]` 管理边界；本实现**严格遵守**“不再注入特殊符号 & 不 wrap”的约束，避免破坏你的显式边界设计。
+   已经把多个同簇 SMILES 串接为 1024，并用 `[SEP]`/`[PAD]` 管理边界；本实现**严格遵守**“不再注入特殊符号 & 不 wrap”的约束，避免破坏显式边界设计。
 
 
 ## 测试
@@ -116,11 +116,10 @@ python -m smiles_bd.sample \
 pytest -q
 ```
 
-- Tokenizer：`[EOS]/[PAD]/[MASK]` 映射正确；`decode` 丢 PAD；
+- Tokenizer：`[SEP]/[EOS]/[PAD]/[MASK]` 映射正确；`decode` 丢 PAD；
 - Dataset：`attention_mask.sum()==非PAD数`；
 - 训练步：只在遮蔽位计损；`num_masked>0`；loss 有限；
-- 采样：前缀不改写；后缀不生成 PAD；可按 `[EOS]` 切分候选；
+- 采样：前缀不改写；后缀不生成 PAD；可按 `[SEP]` 切分候选；
 - Smoke：10 步内 loss 下降（或不升），保障闭环可跑。
 
 ---
-
