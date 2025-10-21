@@ -3,7 +3,6 @@ paths:
   valid_path: ${PWD}/data/DrugLikeSMILSE-debug/validation
   vocab_path: ${PWD}/vocab.txt
   save_dir: ${PWD}/checkpoints
-  # for Arrow datasets (optional)
   arrow_text_column: input
 
 model:
@@ -20,7 +19,7 @@ train:  # EBS(Effective Batch Size) = batch_size (每卡) × grad_accum_steps ×
   device: auto
   batch_size: 2                 # per GPU
   grad_accum_steps: 1           # 梯度累积步数：用多个小批次累积成一个大 batch 再反向更新。 正式训练可以设为 4 or 8, 可以更稳定的增大 EBS
-  epochs: 100
+  epochs: 50
   lr: 3.0e-4
   betas: [0.9, 0.95]            # 不收敛就收窄
   weight_decay: 1.0e-2

@@ -34,7 +34,6 @@ class ArrowDataset(Dataset):
         if not os.path.exists(state_path): raise FileNotFoundError(f"state.json not found under {path_dir}")
         state = json.load(open(state_path, "r"))
         files = [item["filename"] for item in state["_data_files"]]
-        print(f"Loading data from {len(files)} files...")
         for f in tqdm (files, desc="Loading Arrow files"):
             with ipc.open_stream(os.path.join(path_dir, f)) as reader:
                 for batch in reader:
