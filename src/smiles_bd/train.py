@@ -4,6 +4,7 @@ import torch
 import torch.optim as optim
 from torch.nn.utils import clip_grad_norm_
 from torch.nn.parallel import DistributedDataParallel as DDP
+from tqdm import tqdm 
 
 from smiles_bd.config import load_config, merge_cli_overrides
 from smiles_bd.tokenizer_smiles import RegexSmilesTokenizer
@@ -100,10 +101,14 @@ def main():
         if train_sampler is not None:
             train_sampler.set_epoch(epoch)
         diffuser.train()
-        t0 = time.time()
+
+        if is_main_process():
+            progress_bar = tqdm(train_loader, desc=f"Epoch {epoch}", total=steps_per_epoch, leave=False)
+        else:
+            progress_bar = train_loader
 
         with sdpa_kernel_ctx(cfg["model"].get("sdpa_backend", "auto")):
-            for step, batch in enumerate(train_loader, 1):
+            for step, batch in enumerate(progress_bar, 1):
                 batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
                 with autocast_ctx(amp_dtype):
                     out = diffuser(batch)
@@ -122,10 +127,9 @@ def main():
                     else:
                         optimizer.step()
                     optimizer.zero_grad(set_to_none=True)
-
-                if is_main_process() and step % 50 == 0:
-                    dt = time.time() - t0; t0 = time.time()
-                    print(f"[epoch {epoch}] step {step}/{steps_per_epoch} loss={out.loss.item():.4f} masked={int(out.num_masked)} dt={dt:.2f}s")
+                
+                if is_main_process():
+                    progress_bar.set_postfix(loss=out.loss.item(), lr=optimizer.param_groups[0]['lr'])
 
         ppl = evaluate(diffuser, valid_loader, device, amp_dtype)
         if is_main_process():

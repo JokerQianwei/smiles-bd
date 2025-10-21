@@ -17,7 +17,7 @@ model:
 
 train:  # EBS(Effective Batch Size) = batch_size (每卡) × grad_accum_steps × GPU数
   device: auto
-  batch_size: 2                 # per GPU
+  batch_size: 100                 # per GPU
   grad_accum_steps: 1           # 梯度累积步数：用多个小批次累积成一个大 batch 再反向更新。 正式训练可以设为 4 or 8, 可以更稳定的增大 EBS
   epochs: 50
   lr: 3.0e-4
