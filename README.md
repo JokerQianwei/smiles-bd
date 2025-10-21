@@ -1,3 +1,52 @@
+# SMILES Block Diffusion (distributed v6)
+
+Minimal, production-ready codebase for **full-sequence MDLM/SUBS** training on concatenated SMILES (length=1024),
+with **single-node multi-GPU** training (DDP), **AMP (bf16/fp16)**, and **prefix-frozen sampling**. Segments are
+split by **[SEP]** (new convention).
+
+## Features
+- Full-sequence masked diffusion (SUBS): compute CE **only** on masked positions; no chunking.
+- DDP + AMP + Grad Accum + TF32 + optional torch.compile.
+- Robustness: disable NestedTensor by default; configurable SDPA backend; avoids unstable kernel paths.
+- Data: text-line dataset (pre-concatenated + [SEP] + [PAD]) and optional Arrow dataset.
+- Sampling: freeze prefix (A), never-remask, top‑p nucleus, split by [SEP].
+
+## Quickstart
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Single GPU smoke
+```bash
+python -m smiles_bd.train --config configs/default.yaml   --override model.max_len=64 train.epochs=1 train.batch_size=2
+```
+
+### Multi-GPU (4 GPUs)
+```bash
+torchrun --standalone --nproc_per_node=4 -m smiles_bd.train --config configs/default.yaml   --override model.max_len=1024 train.batch_size=1 train.grad_accum_steps=8
+```
+
+### Sampling
+```bash
+python -m smiles_bd.sample --ckpt checkpoints/model.pt   --config configs/default.yaml   --prefix "C1=CC=CC=C1[SEP]"   --override sample.steps=24 sample.top_p=0.9
+```
+
+## Data Contract
+- Each line: `SMILES_A[SEP]SMILES_A'[SEP]...` and **right-padded with [PAD]** to the fixed `model.max_len` (e.g., 1024).
+- No extra special tokens are injected anywhere.
+- `attention_mask==1` only on non-[PAD] tokens.
+
+## Notes on stability
+- If you ever hit CUDA "unspecified launch failure":
+  1) set `model.disable_nested_tensor=true`
+  2) set `model.sdpa_backend=math`
+  3) set `train.amp=off` (or try bf16 first)
+  4) reduce `train.batch_size` and increase `train.grad_accum_steps`
+  5) set `train.persistent_workers=false` in DataLoader
+
+
+---
 
 # SMILES Block Diffusion – Minimal Codebase (v4)
 

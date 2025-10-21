@@ -8,9 +8,7 @@ class ClippedLinearSchedule:
     """
     def __init__(self, beta: float = 0.3, omega: float = 0.8, eps: float = 1e-8):
         assert 0 <= beta <= 1 and 0 <= omega <= 1 and beta < omega
-        self.beta = beta
-        self.omega = omega
-        self.eps = eps
+        self.beta, self.omega, self.eps = beta, omega, eps
 
     def sample_mask_rate(self, batch_shape, device):
         u = torch.rand(batch_shape, device=device)

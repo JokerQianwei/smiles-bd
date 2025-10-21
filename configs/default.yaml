@@ -1,30 +1,42 @@
 
-# Unified configuration for SMILES Block-Diffusion (v4)
 paths:
-  train_path: ./data/DrugLikeSMILSE-debug/train
-  valid_path: ./data/DrugLikeSMILSE-debug/validation
-  vocab_path: ./vocab.txt
-  save_dir: ./checkpoints
+  train_path: ${PWD}/data/DrugLikeSMILSE-debug/train
+  valid_path: ${PWD}/data/DrugLikeSMILSE-debug/validation
+  vocab_path: ${PWD}/vocab.txt
+  save_dir: ${PWD}/checkpoints
+  # for Arrow datasets (optional)
+  arrow_text_column: input
 
 model:
-  max_len: 64 # 1024
-  d_model: 768 # 词嵌入纬度
-  n_heads: 12
-  n_layers: 12
+  max_len: 1024
+  d_model: 512  # 768
+  n_heads: 8  # 12
+  n_layers: 8  # 12
   dropout: 0.1
-  tie_weights: true
+  tie_embeddings: true
+  disable_nested_tensor: true   # stability
+  sdpa_backend: auto            # auto|math|mem_efficient|flash
 
 train:
-  epochs: 50
-  batch_size: 280
-  lr: 3.0e-4
-  beta: 0.3
-  omega: 0.8
-  grad_clip: 1.0  # 梯度裁剪
-  num_workers: 8  # 用多少个子进程来加载数据, 8, 16
   device: auto
+  batch_size: 2                 # per GPU
+  grad_accum_steps: 1
+  epochs: 1
+  lr: 3.0e-4
+  betas: [0.9, 0.95]
+  weight_decay: 1.0e-2
+  eps: 1.0e-8
+  grad_clip: 1.0
+  beta: 0.3                     # mask schedule U[beta,omega]
+  omega: 0.8
+  num_workers: 2
+  pin_memory: true
+  persistent_workers: false
+  prefetch_factor: 2
+  amp: auto                     # auto|bf16|fp16|off
+  compile: false                # torch.compile
 
 sample:
+  device: auto
   steps: 24
   top_p: 0.9
-  device: auto
