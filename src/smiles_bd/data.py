@@ -25,7 +25,7 @@ class TextLineDataset(Dataset):
 class ArrowDataset(Dataset):
     # Optional Arrow dataset: path should be a directory containing state.json with file list.
     def __init__(self, path_dir: str, tokenizer, max_len: int = 1024, text_column: str = "input"):
-        import pyarrow.ipc as ipc; from tqdm import tqdm
+        import pyarrow as pa, pyarrow.ipc as ipc; from tqdm import tqdm
         self.tok = tokenizer
         self.max_len = max_len
         self.col = text_column
@@ -34,15 +34,25 @@ class ArrowDataset(Dataset):
         if not os.path.exists(state_path): raise FileNotFoundError(f"state.json not found under {path_dir}")
         state = json.load(open(state_path, "r"))
         files = [item["filename"] for item in state["_data_files"]]
-        for f in tqdm (files, desc="Loading Arrow files"):
-            with ipc.open_stream(os.path.join(path_dir, f)) as reader:
-                for batch in reader:
-                    texts = batch.column(self.col).to_pylist()
-                    self.samples.extend(texts)
-            
-        if not self.samples:
-            raise RuntimeError("ArrowDataset loaded zero samples")
-
+        for f_name in tqdm(files, desc="Loading Arrow files"):
+            file_path = os.path.join(path_dir, f_name)
+            with open(file_path, "rb") as f:
+                try:
+                    with ipc.open_file(f) as reader:
+                        for i in range(reader.num_record_batches):
+                            batch = reader.get_batch(i)
+                            texts = batch.column(self.col).to_pylist()
+                            self.samples.extend(texts)
+                except pa.ArrowInvalid:
+                    f.seek(0) # 如果失败，将文件指针重置到开头
+                    try:
+                        with ipc.open_stream(f) as reader:
+                            for batch in reader:
+                                texts = batch.column(self.col).to_pylist()
+                                self.samples.extend(texts)
+                    except pa.ArrowInvalid as e_stream:
+                        raise RuntimeError(f"File '{file_path}' is not a valid Arrow IPC File or Stream format.") from e_stream
+                        
     def __len__(self):
         return len(self.samples)
 
