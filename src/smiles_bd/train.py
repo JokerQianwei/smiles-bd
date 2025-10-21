@@ -27,6 +27,9 @@ def evaluate(diffuser, loader, device, amp_dtype):
     tot_nll = torch.zeros(1, device=device)
     tot_mask = torch.zeros(1, device=device)
     with torch.no_grad(), autocast_ctx(amp_dtype):
+        if is_main_process():
+            loader = tqdm(loader, desc="Evaluating")
+
         for batch in loader:
             batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
             out = diffuser(batch)
@@ -35,10 +38,10 @@ def evaluate(diffuser, loader, device, amp_dtype):
     # reduce
     tot_nll = all_reduce_sum(tot_nll)
     tot_mask = all_reduce_sum(tot_mask)
-    mean_nll = (tot_nll / torch.clamp_min(tot_mask, 1)).item()
-    ppl = math.exp(mean_nll) if mean_nll < 30 else float("inf")
+    mean_nll = (tot_nll / torch.clamp_min(tot_mask, 1)).item()  # mean negative log-likelihood
+    ppl = math.exp(mean_nll) if mean_nll < 30 else float("inf")  # masked-token CE
     diffuser.train()
-    return ppl
+    return ppl, mean_nll
 
 def main():
     args = parse_args()
@@ -131,9 +134,9 @@ def main():
                 if is_main_process():
                     progress_bar.set_postfix(loss=out.loss.item(), lr=optimizer.param_groups[0]['lr'])
 
-        ppl = evaluate(diffuser, valid_loader, device, amp_dtype)
+        ppl, valid_loss = evaluate(diffuser, valid_loader, device, amp_dtype)
         if is_main_process():
-            print(f"[epoch {epoch}] valid ppl (masked-token CE) ~ {ppl:.2f}")
+            print(f"[epoch {epoch}] valid loss={valid_loss:.4f}  valid ppl={ppl:.2f}")
             meta = {"vocab_size": tok.vocab_size, "max_len": cfg['model']['max_len'], **cfg["model"]}
             save_checkpoint(diffuser, os.path.join(cfg["paths"]["save_dir"], "model.pt"), meta=meta)
 
