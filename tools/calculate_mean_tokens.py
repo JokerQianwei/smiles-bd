@@ -62,6 +62,7 @@ def calculate_mean_nonpad_tokens_v2(directory):
     mean_value = total_sum / total_count
     return mean_value
 
-
-directory = '/data/yqw/bd3lms-alpha/data/DrugLikeSMILSE_packed1024_butina_s055_blocks10k/train/'
-calculate_mean_nonpad_tokens_v2(directory)
+if __name__ == "__main__":
+    directory = '/data/yqw/bd3lms-alpha/data/DrugLikeSMILSE_packed1024_butina_s055_blocks10k/train/'
+    mean_value = calculate_mean_nonpad_tokens_v2(directory)
+    print("mean_value:", mean_value)
