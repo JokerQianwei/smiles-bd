@@ -103,7 +103,7 @@ def main():
         diffuser.train()
 
         if is_main_process():
-            progress_bar = tqdm(train_loader, desc=f"Epoch {epoch}", total=steps_per_epoch, leave=False)
+            progress_bar = tqdm(train_loader, desc=f"Epoch {epoch}", total=steps_per_epoch)
         else:
             progress_bar = train_loader
 
