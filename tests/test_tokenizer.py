@@ -1,5 +1,5 @@
 import tempfile, os
-from smiles_bd.tokenizer_smiles import RegexSmilesTokenizer
+from smiles_bd.tokenizer import RegexSmilesTokenizer
 
 def _write_vocab(tokens):
     fd,path=tempfile.mkstemp(suffix=".txt")

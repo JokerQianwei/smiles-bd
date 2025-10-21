@@ -1,5 +1,5 @@
 from .config import load_config, merge_cli_overrides
-from .tokenizer_smiles import RegexSmilesTokenizer
+from .tokenizer import RegexSmilesTokenizer
 from .model import TransformerDenoiser
 from .diffusion import MaskedDiffusion
 from .schedule import ClippedLinearSchedule

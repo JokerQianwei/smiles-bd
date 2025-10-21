@@ -83,7 +83,7 @@ python -m smiles_bd.sample --ckpt checkpoints/model.pt   --config configs/defaul
 ├─ examples/
 │  └─ toy_data/         # 64 长度玩具样本
 ├─ src/smiles_bd/
-│  ├─ tokenizer_smiles.py
+│  ├─ tokenizer.py
 │  ├─ schedule.py
 │  ├─ model.py
 │  ├─ diffusion.py

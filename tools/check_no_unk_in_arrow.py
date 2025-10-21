@@ -4,7 +4,7 @@
 检查 Arrow 训练数据能否被你项目里的 tokenizer 正确处理，确保不存在 [UNK]。
 - 读取：data/DrugLikeSMILSE-debug/train/data-00000-of-00001.arrow
 - 词表：--vocab 指向你的 vocab.txt
-- 分词器：src/smiles_bd/tokenizer_smiles.py 中的 RegexSmilesTokenizer
+- 分词器：src/smiles_bd/tokenizer.py 中的 RegexSmilesTokenizer
 
 用法示例：
   python tools/check_no_unk_in_arrow.py \
@@ -32,9 +32,9 @@ def add_src_to_path(src_root: str):
 def load_tokenizer(vocab_path: str, src_root: str):
     add_src_to_path(src_root)
     try:
-        from smiles_bd.tokenizer_smiles import RegexSmilesTokenizer
+        from smiles_bd.tokenizer import RegexSmilesTokenizer
     except Exception as e:
-        print("[ERROR] 无法从 src/smiles_bd/tokenizer_smiles.py 导入 RegexSmilesTokenizer：", e, file=sys.stderr)
+        print("[ERROR] 无法从 src/smiles_bd/tokenizer.py 导入 RegexSmilesTokenizer：", e, file=sys.stderr)
         sys.exit(1)
     if not os.path.isfile(vocab_path):
         print(f"[ERROR] 词表文件不存在：{vocab_path}", file=sys.stderr)

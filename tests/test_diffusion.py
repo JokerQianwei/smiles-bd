@@ -1,5 +1,5 @@
 import torch
-from smiles_bd.tokenizer_smiles import RegexSmilesTokenizer
+from smiles_bd.tokenizer import RegexSmilesTokenizer
 from smiles_bd.model import TransformerDenoiser
 from smiles_bd.schedule import ClippedLinearSchedule
 from smiles_bd.diffusion import MaskedDiffusion

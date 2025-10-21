@@ -1,5 +1,5 @@
 import tempfile, os, torch
-from smiles_bd.tokenizer_smiles import RegexSmilesTokenizer
+from smiles_bd.tokenizer import RegexSmilesTokenizer
 from smiles_bd.data import TextLineDataset
 from smiles_bd.model import TransformerDenoiser
 from smiles_bd.schedule import ClippedLinearSchedule
