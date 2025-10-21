@@ -1,10 +1,12 @@
 import tempfile, os
 from smiles_bd.tokenizer_smiles import RegexSmilesTokenizer
+
 def _write_vocab(tokens):
     fd,path=tempfile.mkstemp(suffix=".txt")
     with os.fdopen(fd,"w") as f:
         for t in tokens: f.write(t+"\n")
     return path
+    
 def test_tokenizer_encode_decode_sep():
     vocab=["[PAD]","[MASK]","[SEP]","[UNK]","C","O","1","=","("," )".strip(),"Cl"]
     vp=_write_vocab(vocab); tok=RegexSmilesTokenizer(vp)

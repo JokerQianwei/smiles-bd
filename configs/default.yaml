@@ -1,4 +1,3 @@
-
 paths:
   train_path: ${PWD}/data/DrugLikeSMILSE-debug/train
   valid_path: ${PWD}/data/DrugLikeSMILSE-debug/validation
@@ -17,24 +16,24 @@ model:
   disable_nested_tensor: true   # stability
   sdpa_backend: auto            # auto|math|mem_efficient|flash
 
-train:
+train:  # EBS(Effective Batch Size) = batch_size (每卡) × grad_accum_steps × GPU数
   device: auto
   batch_size: 2                 # per GPU
-  grad_accum_steps: 1
-  epochs: 1
+  grad_accum_steps: 1           # 梯度累积步数：用多个小批次累积成一个大 batch 再反向更新。 正式训练可以设为 4 or 8, 可以更稳定的增大 EBS
+  epochs: 50
   lr: 3.0e-4
-  betas: [0.9, 0.95]
+  betas: [0.9, 0.95]            # 不收敛就收窄
   weight_decay: 1.0e-2
   eps: 1.0e-8
   grad_clip: 1.0
   beta: 0.3                     # mask schedule U[beta,omega]
   omega: 0.8
-  num_workers: 2
+  num_workers: 8
   pin_memory: true
-  persistent_workers: false
-  prefetch_factor: 2
+  persistent_workers: true      # 常驻 worker   长跑开；不稳就关
+  prefetch_factor: 2            # 预取批次数  吞吐不足→加；内存紧→减
   amp: auto                     # auto|bf16|fp16|off
-  compile: false                # torch.compile
+  compile: false                # 图编译  稳定后开（长跑）
 
 sample:
   device: auto

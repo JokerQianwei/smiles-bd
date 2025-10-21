@@ -1,5 +1,6 @@
 import torch
 from smiles_bd.schedule import ClippedLinearSchedule
+
 def test_schedule_range_and_weight():
     sch=ClippedLinearSchedule(0.2,0.7)
     r=sch.sample_mask_rate((1000,), device="cpu")

@@ -1,16 +1,19 @@
 import tempfile, os, torch
 from smiles_bd.tokenizer_smiles import RegexSmilesTokenizer
 from smiles_bd.data import TextLineDataset
+
 def _write_vocab(tokens):
     fd,path=tempfile.mkstemp(suffix=".txt")
     with os.fdopen(fd,"w") as f:
         for t in tokens: f.write(t+"\n")
     return path
+
 def _write_lines(lines):
     fd,path=tempfile.mkstemp(suffix=".txt")
     with os.fdopen(fd,"w") as f:
         for ln in lines: f.write(ln+"\n")
     return path
+    
 def test_text_dataset_mask_and_len():
     vocab=["[PAD]","[MASK]","[SEP]","[UNK]","C","O"]
     vp=_write_vocab(vocab); tok=RegexSmilesTokenizer(vp)

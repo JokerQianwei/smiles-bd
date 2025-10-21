@@ -1,0 +1,40 @@
+paths:
+  train_path: ${PWD}/data/DrugLikeSMILSE-debug/train
+  valid_path: ${PWD}/data/DrugLikeSMILSE-debug/validation
+  vocab_path: ${PWD}/vocab.txt
+  save_dir: ${PWD}/checkpoints
+  arrow_text_column: input
+
+model:
+  max_len: 1024
+  d_model: 768
+  n_heads: 12
+  n_layers: 12
+  dropout: 0.1
+  tie_embeddings: true
+  disable_nested_tensor: true   
+  sdpa_backend: auto
+
+train:
+  device: auto
+  batch_size: 2
+  grad_accum_steps: 8                # 放大 EBS，稳定收敛
+  epochs: 50
+  lr: 3.0e-4                         # 随 EBS 需要可线性微调
+  betas: [0.9, 0.95]
+  weight_decay: 1.0e-2
+  eps: 1.0e-8
+  grad_clip: 1.0
+  beta: 0.3
+  omega: 0.8
+  num_workers: 8
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 3                 # 预取批次数
+  amp: auto                          # A100/H100→bf16；否则 fp16
+  compile: true                      # torch.compile 加速（reduce-overhead）
+
+sample:
+  device: auto
+  steps: 24
+  top_p: 0.9

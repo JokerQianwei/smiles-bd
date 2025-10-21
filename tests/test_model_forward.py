@@ -1,5 +1,6 @@
 import torch
 from smiles_bd.model import TransformerDenoiser
+
 def test_model_forward_shape():
     vocab=16
     model=TransformerDenoiser(vocab_size=vocab, d_model=64, n_heads=4, n_layers=2, max_len=32, disable_nested_tensor=True)
