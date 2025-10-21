@@ -1,4 +1,3 @@
-
 import tempfile, os, torch
 from smiles_bd.tokenizer_smiles import RegexSmilesTokenizer
 from smiles_bd.data import TextLineDataset
