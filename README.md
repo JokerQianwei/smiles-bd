@@ -27,6 +27,15 @@ python -m smiles_bd.train --config configs/default.yaml   --override model.max_l
 torchrun --standalone --nproc_per_node=4 -m smiles_bd.train --config configs/default.yaml   --override model.max_len=1024 train.batch_size=1 train.grad_accum_steps=8
 ```
 
+### 指定特定的GPU
+```bash
+CUDA_VISIBLE_DEVICES=1,3 \
+torchrun --standalone --nproc_per_node=2 \
+  -m smiles_bd.train \
+  --config configs/train_full.yaml \
+  --override train.batch_size=2 train.grad_accum_steps=8
+```
+
 ### Sampling
 ```bash
 python -m smiles_bd.sample --ckpt checkpoints/model.pt   --config configs/default.yaml   --prefix "C1=CC=CC=C1[SEP]"   --override sample.steps=24 sample.top_p=0.9
