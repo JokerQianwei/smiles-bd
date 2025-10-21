@@ -1,9 +1,9 @@
 paths:
-  train_path: ${PWD}/data/DrugLikeSMILSE-debug/train
-  valid_path: ${PWD}/data/DrugLikeSMILSE-debug/validation
+  train_path: /data/yqw/bd3lms-alpha/data/DrugLikeSMILSE_packed1024_butina_s055_blocks10k/train
+  valid_path: /data/yqw/bd3lms-alpha/data/DrugLikeSMILSE_packed1024_butina_s055_blocks10k/validation
   vocab_path: ${PWD}/vocab.txt
-  save_dir: ${PWD}/checkpoints
-  arrow_text_column: input
+  save_dir: ${PWD}/checkpoints/test_packed1024
+  arrow_text_column: text
 
 model:
   max_len: 1024
@@ -17,7 +17,7 @@ model:
 
 train:
   device: auto
-  batch_size: 2
+  batch_size: 10
   grad_accum_steps: 8                # 放大 EBS，稳定收敛
   epochs: 50
   lr: 3.0e-4                         # 随 EBS 需要可线性微调
