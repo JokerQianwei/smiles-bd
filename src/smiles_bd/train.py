@@ -14,7 +14,7 @@ from smiles_bd.diffusion import MaskedDiffusion
 from smiles_bd.data import make_loaders
 from smiles_bd.utils import (save_checkpoint, set_seed, set_torch_backends,
                              distributed_init, is_distributed, is_main_process, get_rank,
-                             all_reduce_sum, sdpa_kernel_ctx, autocast_ctx, get_amp_dtype)
+                             all_reduce_sum, sdpa_kernel_ctx, autocast_ctx, get_amp_dtype, count_parameters)
 
 def parse_args():
     ap = argparse.ArgumentParser("Distributed training for SMILES masked diffusion (full-sequence SUBS).")
@@ -77,6 +77,10 @@ def main():
                                mask_token_id=tok.mask_token_id,
                                sep_token_id=tok.sep_token_id,
                                max_len=cfg["model"]["max_len"]).to(device)
+
+    if is_main_process():
+        total_params, trainable_params = count_parameters(diffuser)
+        print(f"Total Parameters: {total_params / 1e6:.2f} M, Trainable Parameters: {trainable_params / 1e6:.2f} M")
 
     # optional compile
     if cfg["train"].get("compile", False) and hasattr(torch, "compile"):

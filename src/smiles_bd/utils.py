@@ -112,3 +112,8 @@ def autocast_ctx(amp_dtype):
     else:
         with torch.autocast(device_type="cuda", dtype=amp_dtype, enabled=torch.cuda.is_available()):
             yield
+
+def count_parameters(module: torch.nn.Module) -> tuple[int, int]:
+    total_params = sum(p.numel() for p in module.parameters())
+    trainable_params = sum(p.numel() for p in module.parameters() if p.requires_grad)
+    return total_params, trainable_params
