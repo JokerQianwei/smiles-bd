@@ -17,6 +17,39 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+```bash
+# One-time preprocess -> cache, then train
+python -m smiles_bd.train_iter \
+  --config configs/default.yaml \
+  --data_dir /path/to/data_dir \
+  --cache_dir /path/to/cache_dir \
+  --vocab_path ./vocab.txt
+
+# Resume
+python -m smiles_bd.train_iter \
+  --config configs/default.yaml --data_dir ... --cache_dir ... \
+  --vocab_path ./vocab.txt --resume checkpoints/iter_0002000.pt
+```
+
+### Data directory
+- **Text**: `data_dir/train.txt` and `data_dir/valid.txt`, one SMILES per line.
+- **Arrow**: a `datasets.save_to_disk` directory (either combined, or `train/` and `validation/` subdirs).
+
+### Checkpoint contents
+Each `.pt` contains:
+```jsonc
+{
+  "model": "...state_dict...",
+  "optimizer": "...AdamW...",
+  "scaler": "...GradScaler...",
+  "config": { ... full YAML ... },
+  "step": 12345,
+  "best_val_loss": 1.2345
+}
+```
+The best model is continuously written to `checkpoints/best_model.pt`.
+
+
 ### Single GPU smoke
 ```bash
 python -m smiles_bd.train --config configs/default.yaml   --override model.max_len=64 train.epochs=1 train.batch_size=2

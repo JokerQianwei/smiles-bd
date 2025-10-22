@@ -1,76 +1,78 @@
-
-import argparse, os, math, time
+import argparse, os, math, time, json
+from typing import Dict, Any
 import torch
 import torch.optim as optim
 from torch.nn.utils import clip_grad_norm_
 from torch.nn.parallel import DistributedDataParallel as DDP
-from tqdm import tqdm 
+from tqdm import tqdm
 
-from smiles_bd.config import load_config, merge_cli_overrides
-from smiles_bd.tokenizer import RegexSmilesTokenizer
-from smiles_bd.model import TransformerDenoiser
-from smiles_bd.schedule import ClippedLinearSchedule
-from smiles_bd.diffusion import MaskedDiffusion
-from smiles_bd.data import make_loaders
-from smiles_bd.utils import (save_checkpoint, set_seed, set_torch_backends,
-                             distributed_init, is_distributed, is_main_process, get_rank,
-                             all_reduce_sum, sdpa_kernel_ctx, autocast_ctx, get_amp_dtype, count_parameters)
+from .config import load_config, merge_cli_overrides
+from .tokenizer import RegexSmilesTokenizer
+from .model import TransformerDenoiser
+from .schedule import ClippedLinearSchedule
+from .diffusion import MaskedDiffusion
+from .data import prepare_or_load_dataset, create_dataloaders
+from .checkpoint import pack_state, save_checkpoint, load_checkpoint
+from .utils import (set_seed, set_torch_backends, distributed_init, is_distributed, is_main_process,
+                    get_amp_dtype, autocast_ctx, all_reduce_mean, all_reduce_sum, count_parameters, print0)
 
-def parse_args():
-    ap = argparse.ArgumentParser("Distributed training for SMILES masked diffusion (full-sequence SUBS).")
-    ap.add_argument("--config", type=str, default="configs/default.yaml")
-    ap.add_argument("--override", type=str, nargs="*")
-    return ap.parse_args()
-
+@torch.no_grad()
 def evaluate(diffuser, loader, device, amp_dtype):
-    diffuser.eval()
     tot_nll = torch.zeros(1, device=device)
     tot_mask = torch.zeros(1, device=device)
-    with torch.no_grad(), autocast_ctx(amp_dtype):
-        if is_main_process():
-            loader = tqdm(loader, desc="Evaluating")
-
-        for batch in loader:
-            batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
+    if is_main_process():
+        loader = tqdm(loader, desc="valid")
+    for batch in loader:
+        batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
+        with autocast_ctx(amp_dtype):
             out = diffuser(batch)
-            tot_nll += out.token_nll * out.num_masked
-            tot_mask += out.num_masked.float()
-    # reduce
+        tot_nll += out.token_nll * out.num_masked
+        tot_mask += out.num_masked.float()
     tot_nll = all_reduce_sum(tot_nll)
     tot_mask = all_reduce_sum(tot_mask)
-    mean_nll = (tot_nll / torch.clamp_min(tot_mask, 1)).item()  # mean negative log-likelihood
-    ppl = math.exp(mean_nll) if mean_nll < 30 else float("inf")  # masked-token CE
-    diffuser.train()
+    mean_nll = (tot_nll / torch.clamp_min(tot_mask, 1)).item()
+    ppl = math.exp(mean_nll) if mean_nll < 30 else float("inf")
     return ppl, mean_nll
 
-def main():
-    args = parse_args()
-    cfg = merge_cli_overrides(load_config(args.config), args.override)
+def infinite_loader(loader):
+    while True:
+        for batch in loader:
+            yield batch
 
-    dist_info = distributed_init()
-    rank = get_rank()
-    device = cfg["train"]["device"]
-    if device == "cuda" and torch.cuda.is_available():
-        device = f"cuda:{int(os.environ.get('LOCAL_RANK', 0))}"
-    set_torch_backends()
-    set_seed(42 + rank)
+def train_main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, required=True, help="path to YAML config")
+    parser.add_argument("--data_dir", type=str, required=True, help="root dir with train.txt/valid.txt or HF dataset")
+    parser.add_argument("--cache_dir", type=str, required=True, help="where tokenized HF dataset will be cached")
+    parser.add_argument("--vocab_path", type=str, default="vocab.txt")
+    parser.add_argument("--resume", type=str, default=None, help="checkpoint path to resume from")
+    parser.add_argument("--overrides", type=str, default="{}", help="JSON string to override config keys")
+    args = parser.parse_args()
 
-    tok = RegexSmilesTokenizer(cfg["paths"]["vocab_path"])
+    cfg = load_config(args.config)
+    cfg = merge_cli_overrides(cfg, json.loads(args.overrides))
 
-    train_loader, valid_loader, train_sampler, valid_sampler = make_loaders(
-        cfg["paths"]["train_path"], cfg["paths"]["valid_path"], tok,
-        max_len=cfg["model"]["max_len"], batch_size=cfg["train"]["batch_size"],
-        num_workers=cfg["train"]["num_workers"], pin_memory=cfg["train"]["pin_memory"],
-        persistent_workers=cfg["train"]["persistent_workers"], prefetch_factor=cfg["train"]["prefetch_factor"],
-        distributed=is_distributed(), seed=42+rank, text_column=cfg["paths"].get("arrow_text_column","input")
+    distributed_init()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    set_seed(cfg["train"].get("seed", 1337))
+    set_torch_backends(cfg["train"].get("tf32", True))
+
+    # Tokenizer + datasets
+    tok = RegexSmilesTokenizer(args.vocab_path)
+    tokenized = prepare_or_load_dataset(raw_data_dir=args.data_dir, cache_dir=args.cache_dir,
+                                        tokenizer=tok, max_len=cfg["model"]["max_len"],
+                                        text_column=cfg["data"].get("text_column", "text"),
+                                        num_proc=cfg["data"].get("num_proc", 4))
+    train_loader, valid_loader, train_sampler, valid_sampler = create_dataloaders(
+        tokenized, batch_size=cfg["train"]["batch_size"], num_workers=cfg["data"].get("num_workers", 4)
     )
 
+    # Model + diffusion
     model = TransformerDenoiser(
-        vocab_size=tok.vocab_size, d_model=cfg["model"]["d_model"],
-        n_heads=cfg["model"]["n_heads"], n_layers=cfg["model"]["n_layers"],
-        max_len=cfg["model"]["max_len"], dropout=cfg["model"]["dropout"],
-        tie_embeddings=cfg["model"]["tie_embeddings"], disable_nested_tensor=cfg["model"]["disable_nested_tensor"]
-    )
+        vocab_size=tok.vocab_size, max_len=cfg["model"]["max_len"],
+        d_model=cfg["model"]["d_model"], n_heads=cfg["model"]["n_heads"],
+        n_layers=cfg["model"]["n_layers"], dropout=cfg["model"].get("dropout", 0.1)
+    ).to(device)
     schedule = ClippedLinearSchedule(beta=cfg["train"]["beta"], omega=cfg["train"]["omega"])
     diffuser = MaskedDiffusion(model, tok, schedule,
                                pad_token_id=tok.pad_token_id,
@@ -80,11 +82,11 @@ def main():
 
     if is_main_process():
         total_params, trainable_params = count_parameters(diffuser)
-        print(f"Total Parameters: {total_params / 1e6:.2f} M, Trainable Parameters: {trainable_params / 1e6:.2f} M")
+        print0(f"Params: total {total_params/1e6:.2f}M, trainable {trainable_params/1e6:.2f}M")
 
-    # optional compile
+    # Compile for speed (optional)
     if cfg["train"].get("compile", False) and hasattr(torch, "compile"):
-        diffuser = torch.compile(diffuser, mode="reduce-overhead")
+        diffuser = torch.compile(diffuser, mode=cfg["train"].get("compile_mode", "reduce-overhead"))
 
     # DDP
     if is_distributed():
@@ -101,48 +103,87 @@ def main():
     amp_dtype = get_amp_dtype(cfg["train"].get("amp", "auto"))
     scaler = torch.cuda.amp.GradScaler(enabled=(amp_dtype == torch.float16))
 
-    accum = max(1, int(cfg["train"].get("grad_accum_steps", 1)))
-    steps_per_epoch = len(train_loader)
+    # Resume
+    start_step = 0
+    best_val = float("inf")
+    if args.resume and os.path.isfile(args.resume):
+        ckpt = load_checkpoint(args.resume, map_location="cpu")
+        sd = ckpt.get("model", ckpt.get("state_dict", None))
+        if sd is not None:
+            getattr(diffuser, "module", diffuser).load_state_dict(sd)
+        if ckpt.get("optimizer"):
+            optimizer.load_state_dict(ckpt["optimizer"])
+        if ckpt.get("scaler"):
+            scaler.load_state_dict(ckpt["scaler"])
+        start_step = int(ckpt.get("step", 0))
+        best_val = float(ckpt.get("best_val_loss", float("inf")))
+        print0(f"Resumed from {args.resume} at step={start_step}, best_val={best_val:.4f}")
 
-    for epoch in range(1, cfg["train"]["epochs"] + 1):
-        if train_sampler is not None:
-            train_sampler.set_epoch(epoch)
-        diffuser.train()
+    # Training schedule
+    max_iters      = int(cfg["train"]["max_iters"])
+    grad_accum     = int(cfg["train"].get("grad_accum_steps", 1))
+    log_interval   = int(cfg["train"].get("log_interval", 10))
+    eval_interval  = int(cfg["train"].get("eval_interval", 1000))
+    save_interval  = int(cfg["train"].get("save_interval", 1000))
+    save_dir       = cfg["paths"]["save_dir"]
 
-        if is_main_process():
-            progress_bar = tqdm(train_loader, desc=f"Epoch {epoch}", total=steps_per_epoch)
+    os.makedirs(save_dir, exist_ok=True)
+
+    if is_distributed() and train_sampler is not None:
+        train_sampler.set_epoch(0)
+
+    iter_loader = infinite_loader(train_loader)
+
+    step = start_step
+    diffuser.train()
+    progress = tqdm(total=max_iters - step, initial=0, disable=not is_main_process(), desc="train")
+    while step < max_iters:
+        optimizer.zero_grad(set_to_none=True)
+        for _ in range(grad_accum):
+            if is_distributed() and train_sampler is not None and (step % 1000 == 0):
+                train_sampler.set_epoch(step)
+            batch = next(iter_loader)
+            batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
+            with autocast_ctx(amp_dtype):
+                out = diffuser(batch)
+                loss = out.loss / grad_accum
+            if amp_dtype == torch.float16:
+                scaler.scale(loss).backward()
+            else:
+                loss.backward()
+        if amp_dtype == torch.float16:
+            scaler.unscale_(optimizer)
+        if cfg["train"].get("grad_clip", 0.0) > 0:
+            clip_grad_norm_(diffuser.parameters(), cfg["train"]["grad_clip"])
+        if amp_dtype == torch.float16:
+            scaler.step(optimizer)
+            scaler.update()
         else:
-            progress_bar = train_loader
+            optimizer.step()
 
-        with sdpa_kernel_ctx(cfg["model"].get("sdpa_backend", "auto")):
-            for step, batch in enumerate(progress_bar, 1):
-                batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
-                with autocast_ctx(amp_dtype):
-                    out = diffuser(batch)
-                    loss = out.loss / accum
-                if amp_dtype == torch.float16:
-                    scaler.scale(loss).backward()
-                else:
-                    loss.backward()
+        step += 1
+        if is_main_process() and step % log_interval == 0:
+            progress.update(log_interval)
+            progress.set_postfix(step=step, loss=float(out.loss))
 
-                if step % accum == 0:
-                    if amp_dtype == torch.float16:
-                        scaler.unscale_(optimizer)
-                    clip_grad_norm_(diffuser.parameters(), cfg["train"]["grad_clip"])
-                    if amp_dtype == torch.float16:
-                        scaler.step(optimizer); scaler.update()
-                    else:
-                        optimizer.step()
-                    optimizer.zero_grad(set_to_none=True)
-                
-                if is_main_process():
-                    progress_bar.set_postfix(loss=out.loss.item(), lr=optimizer.param_groups[0]['lr'])
+        # periodic eval
+        if step % eval_interval == 0 or step == max_iters:
+            diffuser.eval()
+            ppl, val_loss = evaluate(diffuser, valid_loader, device, amp_dtype)
+            if is_main_process():
+                print0(f"[iter {step}] valid loss={val_loss:.4f}, ppl={ppl:.2f}")
+            diffuser.train()
+            # save best
+            if val_loss < best_val and is_main_process():
+                best_val = val_loss
+                state = pack_state(diffuser, optimizer, scaler, cfg, step, best_val)
+                save_checkpoint(os.path.join(save_dir, "best_model.pt"), state)
 
-        ppl, valid_loss = evaluate(diffuser, valid_loader, device, amp_dtype)
-        if is_main_process():
-            print(f"[epoch {epoch}] valid loss={valid_loss:.4f}  valid ppl={ppl:.2f}")
-            meta = {"vocab_size": tok.vocab_size, "max_len": cfg['model']['max_len'], **cfg["model"]}
-            save_checkpoint(diffuser, os.path.join(cfg["paths"]["save_dir"], "model.pt"), meta=meta)
+        # periodic save
+        if is_main_process() and (step % save_interval == 0 or step == max_iters):
+            state = pack_state(diffuser, optimizer, scaler, cfg, step, best_val)
+            save_checkpoint(os.path.join(save_dir, f"iter_{step:07d}.pt"), state)
 
-if __name__ == "__main__":
-    main()
+    if is_main_process():
+        progress.close()
+        print0("Training done.")
