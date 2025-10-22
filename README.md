@@ -19,14 +19,14 @@ pip install -r requirements.txt
 
 ```bash
 # One-time preprocess -> cache, then train
-python -m smiles_bd.train_iter \
+python -m smiles_bd.train \
   --config configs/default.yaml \
   --data_dir /path/to/data_dir \
   --cache_dir /path/to/cache_dir \
   --vocab_path ./vocab.txt
 
 # Resume
-python -m smiles_bd.train_iter \
+python -m smiles_bd.train \
   --config configs/default.yaml --data_dir ... --cache_dir ... \
   --vocab_path ./vocab.txt --resume checkpoints/iter_0002000.pt
 ```

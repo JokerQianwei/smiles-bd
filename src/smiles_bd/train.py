@@ -1,4 +1,4 @@
-import argparse, os, math, time, json
+import argparse, os, math, json
 from typing import Dict, Any
 import torch
 import torch.optim as optim
@@ -14,7 +14,7 @@ from .diffusion import MaskedDiffusion
 from .data import prepare_or_load_dataset, create_dataloaders
 from .checkpoint import pack_state, save_checkpoint, load_checkpoint
 from .utils import (set_seed, set_torch_backends, distributed_init, is_distributed, is_main_process,
-                    get_amp_dtype, autocast_ctx, all_reduce_mean, all_reduce_sum, count_parameters, print0)
+                    get_amp_dtype, autocast_ctx, all_reduce_sum, count_parameters, print0)
 
 @torch.no_grad()
 def evaluate(diffuser, loader, device, amp_dtype):
@@ -39,12 +39,11 @@ def infinite_loader(loader):
         for batch in loader:
             yield batch
 
-def train_main():
+def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, required=True, help="path to YAML config")
-    parser.add_argument("--data_dir", type=str, required=True, help="root dir with train.txt/valid.txt or HF dataset")
-    parser.add_argument("--cache_dir", type=str, required=True, help="where tokenized HF dataset will be cached")
-    parser.add_argument("--vocab_path", type=str, default="vocab.txt")
+    parser.add_argument("--config", type=str, default="configs/default.yaml")
+    parser.add_argument("--data_dir", type=str, default=None, help="override paths.data_dir from config")
+    parser.add_argument("--cache_dir", type=str, default=None, help="override paths.cache_dir from config")
     parser.add_argument("--resume", type=str, default=None, help="checkpoint path to resume from")
     parser.add_argument("--overrides", type=str, default="{}", help="JSON string to override config keys")
     args = parser.parse_args()
@@ -52,19 +51,26 @@ def train_main():
     cfg = load_config(args.config)
     cfg = merge_cli_overrides(cfg, json.loads(args.overrides))
 
+    if args.data_dir:
+        cfg.setdefault("paths", {})["data_dir"] = args.data_dir
+    if args.cache_dir:
+        cfg.setdefault("paths", {})["cache_dir"] = args.cache_dir
+
     distributed_init()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     set_seed(cfg["train"].get("seed", 1337))
-    set_torch_backends(cfg["train"].get("tf32", True))
+    set_torch_backends()
 
     # Tokenizer + datasets
-    tok = RegexSmilesTokenizer(args.vocab_path)
-    tokenized = prepare_or_load_dataset(raw_data_dir=args.data_dir, cache_dir=args.cache_dir,
-                                        tokenizer=tok, max_len=cfg["model"]["max_len"],
+    tok = RegexSmilesTokenizer(cfg["paths"]["vocab_path"])
+    tokenized = prepare_or_load_dataset(raw_data_dir=cfg["paths"]["data_dir"],
+                                        cache_dir=cfg["paths"]["cache_dir"],
+                                        tokenizer=tok,
+                                        max_len=cfg["model"]["max_len"],
                                         text_column=cfg["data"].get("text_column", "text"),
                                         num_proc=cfg["data"].get("num_proc", len(os.sched_getaffinity(0))))
     train_loader, valid_loader, train_sampler, valid_sampler = create_dataloaders(
-        tokenized, batch_size=cfg["train"]["batch_size"], num_workers=cfg["data"].get("num_workers", 4)
+        tokenized, batch_size=cfg["train"]["batch_size"], num_workers=cfg["data"].get("num_workers", 8)
     )
 
     # Model + diffusion
@@ -187,3 +193,6 @@ def train_main():
     if is_main_process():
         progress.close()
         print0("Training done.")
+
+if __name__ == "__main__":
+    main()
