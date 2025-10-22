@@ -62,7 +62,7 @@ def train_main():
     tokenized = prepare_or_load_dataset(raw_data_dir=args.data_dir, cache_dir=args.cache_dir,
                                         tokenizer=tok, max_len=cfg["model"]["max_len"],
                                         text_column=cfg["data"].get("text_column", "text"),
-                                        num_proc=cfg["data"].get("num_proc", 4))
+                                        num_proc=cfg["data"].get("num_proc", len(os.sched_getaffinity(0))))
     train_loader, valid_loader, train_sampler, valid_sampler = create_dataloaders(
         tokenized, batch_size=cfg["train"]["batch_size"], num_workers=cfg["data"].get("num_workers", 4)
     )
