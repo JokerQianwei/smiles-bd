@@ -27,11 +27,23 @@ def set_seed(seed: int = 42):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-def set_torch_backends():
+def set_torch_backends(enable_tf32=True, sdpa_backend="auto"):
     if torch.cuda.is_available():
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.set_float32_matmul_precision("high")
-        torch.backends.cudnn.benchmark = True
+        torch.backends.cuda.matmul.allow_tf32 = enable_tf32
+        torch.backends.cudnn.allow_tf32 = enable_tf32
+        if sdpa_backend == "math":
+            torch.backends.cuda.enable_flash_sdp(False)
+            torch.backends.cuda.enable_mem_efficient_sdp(False)
+            torch.backends.cuda.enable_math_sdp(True)
+        elif sdpa_backend == "mem_efficient":
+            torch.backends.cuda.enable_flash_sdp(False)
+            torch.backends.cuda.enable_mem_efficient_sdp(True)
+            torch.backends.cuda.enable_math_sdp(False)
+        elif sdpa_backend == "flash":
+            torch.backends.cuda.enable_flash_sdp(True)
+            torch.backends.cuda.enable_mem_efficient_sdp(False)
+            torch.backends.cuda.enable_math_sdp(False)
+
 
 # ----- Distributed helpers -----
 def distributed_init() -> Dict[str, Any]:
@@ -62,31 +74,6 @@ def all_reduce_sum(x: torch.Tensor) -> torch.Tensor:
     if is_distributed():
         dist.all_reduce(x, op=dist.ReduceOp.SUM)
     return x
-
-# ----- SDPA backend context -----
-@contextlib.contextmanager
-def sdpa_kernel_ctx(backend: str = "auto"):
-    """
-    backend: 'auto'|'math'|'mem_efficient'|'flash'
-    """
-    if not torch.cuda.is_available():
-        yield
-        return
-    from torch.backends.cuda import sdp_kernel
-    if backend == "auto":
-        with sdp_kernel(enable_flash=True, enable_math=True, enable_mem_efficient=True):
-            yield
-    elif backend == "math":
-        with sdp_kernel(enable_flash=False, enable_math=True, enable_mem_efficient=False):
-            yield
-    elif backend == "mem_efficient":
-        with sdp_kernel(enable_flash=False, enable_math=False, enable_mem_efficient=True):
-            yield
-    elif backend == "flash":
-        with sdp_kernel(enable_flash=True, enable_math=False, enable_mem_efficient=False):
-            yield
-    else:
-        yield
 
 # ----- AMP helpers -----
 def get_amp_dtype(mode: str = "auto"):

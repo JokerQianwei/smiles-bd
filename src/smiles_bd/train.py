@@ -59,7 +59,10 @@ def main():
     distributed_init()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     set_seed(cfg["train"].get("seed", 1337))
-    set_torch_backends()
+    
+    set_torch_backends(cfg["train"].get("tf32", True),
+                   cfg["train"].get("sdpa_backend", "auto"))
+
 
     # Tokenizer + datasets
     tok = RegexSmilesTokenizer(cfg["paths"]["vocab_path"])

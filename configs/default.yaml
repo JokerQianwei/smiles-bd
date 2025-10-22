@@ -9,7 +9,7 @@ data:
   num_workers: 8
 
 model:
-  max_len: 1024
+  max_len: 64
   d_model: 512
   n_heads: 8
   n_layers: 8
@@ -26,6 +26,9 @@ train:
   amp: auto              # auto|bf16|fp16|off
   compile: false         # 图编译  稳定后开（长跑）
   compile_mode: reduce-overhead
+  sdpa_backend： auto
+  tf32: true
+
 
   # iteration-based control
   max_iters: 100000

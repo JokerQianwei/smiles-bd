@@ -25,7 +25,7 @@ def main():
         vocab_size=tok.vocab_size, d_model=cfg["model"]["d_model"],
         n_heads=cfg["model"]["n_heads"], n_layers=cfg["model"]["n_layers"],
         max_len=cfg["model"]["max_len"], dropout=cfg["model"]["dropout"],
-        tie_embeddings=cfg["model"]["tie_embeddings"], disable_nested_tensor=cfg["model"]["disable_nested_tensor"]
+        tie_embeddings=cfg["model"]["tie_embeddings"]
     )
     schedule = ClippedLinearSchedule(beta=cfg["train"]["beta"], omega=cfg["train"]["omega"])
     diffuser = MaskedDiffusion(model, tok, schedule,
