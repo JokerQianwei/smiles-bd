@@ -117,3 +117,8 @@ def count_parameters(module: torch.nn.Module) -> tuple[int, int]:
     total_params = sum(p.numel() for p in module.parameters())
     trainable_params = sum(p.numel() for p in module.parameters() if p.requires_grad)
     return total_params, trainable_params
+
+def print0(s="",**kwargs):
+    ddp_rank = int(os.environ.get('RANK', 0))
+    if ddp_rank == 0:
+        print(s, **kwargs)
