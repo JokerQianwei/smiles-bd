@@ -1,6 +1,6 @@
 paths:
   data_dir: /data/yqw/smiles-bd/data/DrugLikeSMILSE-debug
-  cache_dir: ${PWD}/cache/cache-DrugLikeSMILSE-debug
+  cache_dir: /data/yqw/smiles-bd/cache/cache-DrugLikeSMILSE-debug
   vocab_path: ${PWD}/vocab.txt
   save_dir: ${PWD}/checkpoints
 

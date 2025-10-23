@@ -19,7 +19,14 @@ def _discover_raw_txt(raw_dir: str) -> Tuple[Optional[str], Optional[str]]:
     return None, None
 
 def _looks_like_hf_disk(path: str) -> bool:
-    return os.path.exists(os.path.join(path, "dataset_info.json")) or os.path.exists(os.path.join(path, "state.json"))
+    if not os.path.isdir(path): return False
+    # single dataset
+    if any(os.path.exists(os.path.join(path, f)) for f in ["dataset_info.json", "state.json"]): return True
+    # dataset dict (train/, validation/ ...)
+    for sub in os.listdir(path):
+        sub_path = os.path.join(path, sub)
+        if os.path.isdir(sub_path) and any(os.path.exists(os.path.join(sub_path, f)) for f in ["dataset_info.json", "state.json"]): return True
+    return False
 
 def prepare_or_load_dataset(raw_data_dir: str, cache_dir: str, tokenizer, max_len: int,
                             text_column: str = "text", num_proc: int = len(os.sched_getaffinity(0)),
