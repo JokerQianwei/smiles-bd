@@ -1,5 +1,5 @@
-import os, yaml
-from typing import Any, Dict
+import os, yaml, re
+from typing import Any, Dict, List
 
 def load_config(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
@@ -20,13 +20,26 @@ def save_config(cfg: Dict[str, Any], path: str) -> None:
     with open(path, "w", encoding="utf-8") as f:
         yaml.safe_dump(cfg, f, sort_keys=False)
 
-def merge_cli_overrides(cfg: Dict[str, Any], overrides: Dict[str, Any]) -> Dict[str, Any]:
-    # shallow-merge; nested dictionaries are updated recursively
-    def merge(a, b):
-        for k, v in b.items():
-            if isinstance(v, dict) and isinstance(a.get(k), dict):
-                merge(a[k], v)
-            else:
-                a[k] = v
-        return a
-    return merge(dict(cfg), overrides)
+def merge_cli_overrides(cfg: Dict[str, Any], pairs: List[str]) -> Dict[str, Any]:
+    if not pairs:
+        return cfg
+    for kv in pairs:
+        k, v = kv.split("=", 1)
+        node = cfg
+        parts = k.split(".")
+        for p in parts[:-1]:
+            node = node.setdefault(p, {})
+        sval = str(v)
+        if sval.lower() in ("true","false"):
+            val: Any = sval.lower()=="true"
+        elif re.fullmatch(r"-?\d+", sval):
+            val = int(sval)
+        elif re.fullmatch(r"-?\d+\.\d*", sval) or "e" in sval.lower():
+            try:
+                val = float(sval)
+            except Exception:
+                val = sval
+        else:
+            val = v
+        node[parts[-1]] = val
+    return cfg

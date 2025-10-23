@@ -26,7 +26,7 @@ train:
   amp: auto              # auto|bf16|fp16|off
   compile: false         # 图编译  稳定后开（长跑）
   compile_mode: reduce-overhead
-  sdpa_backend： auto
+  sdpa_backend: auto 
   tf32: true
 
 

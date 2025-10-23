@@ -1,4 +1,4 @@
-import argparse, os, math, json
+import argparse, os, math
 from typing import Dict, Any
 import torch
 import torch.optim as optim
@@ -45,11 +45,11 @@ def main():
     parser.add_argument("--data_dir", type=str, default=None, help="override paths.data_dir from config")
     parser.add_argument("--cache_dir", type=str, default=None, help="override paths.cache_dir from config")
     parser.add_argument("--resume", type=str, default=None, help="checkpoint path to resume from")
-    parser.add_argument("--overrides", type=str, default="{}", help="JSON string to override config keys")
+    parser.add_argument("--override", nargs='+', default=[], help="key=value pairs to override config keys")
     args = parser.parse_args()
 
     cfg = load_config(args.config)
-    cfg = merge_cli_overrides(cfg, json.loads(args.overrides))
+    cfg = merge_cli_overrides(cfg, args.override)
 
     if args.data_dir:
         cfg.setdefault("paths", {})["data_dir"] = args.data_dir

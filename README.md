@@ -21,9 +21,9 @@ pip install -r requirements.txt
 # One-time preprocess -> cache, then train
 python -m smiles_bd.train \
   --config configs/default.yaml \
-  --data_dir /path/to/data_dir \
-  --cache_dir /path/to/cache_dir \
-  --vocab_path ./vocab.txt
+  --data_dir /data/yqw/smiles-bd/data/DrugLikeSMILSE-debug \
+  --cache_dir /data/yqw/smiles-bd/cache/DrugLikeSMILSE-debug \
+  --override model.max_len=65 train.batch_size=32
 
 # Resume
 python -m smiles_bd.train \
@@ -52,12 +52,12 @@ The best model is continuously written to `checkpoints/best_model.pt`.
 
 ### Single GPU smoke
 ```bash
-python -m smiles_bd.train --config configs/default.yaml   --override model.max_len=64 train.epochs=1 train.batch_size=2
+python -m smiles_bd.train --config configs/default.yaml  --override model.max_len=65  
 ```
 
 ### Multi-GPU (4 GPUs)
 ```bash
-torchrun --standalone --nproc_per_node=4 -m smiles_bd.train --config configs/default.yaml   --override model.max_len=1024 train.batch_size=1 train.grad_accum_steps=8
+torchrun --standalone --nproc_per_node=4 -m smiles_bd.train --config configs/default.yaml   --override model.max_len=64 
 ```
 
 ### 指定特定的GPU
