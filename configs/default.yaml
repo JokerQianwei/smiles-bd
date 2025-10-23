@@ -29,6 +29,7 @@ train:
   compile_mode: reduce-overhead
   sdpa_backend: auto 
   tf32: true
+  eval_subset_ratio: 0.1
 
 
   # iteration-based control

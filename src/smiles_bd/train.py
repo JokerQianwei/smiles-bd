@@ -35,6 +35,34 @@ def evaluate(diffuser, loader, device, amp_dtype):
     ppl = math.exp(mean_nll) if mean_nll < 30 else float("inf")
     return ppl, mean_nll
 
+def evaluate(diffuser, loader, device, amp_dtype, subset_ratio: float = 1.0):
+    """
+    Evaluate validation loss. If subset_ratio < 1, randomly sample that fraction of the validation set.
+    """
+    import random
+    losses, tokens = [], 0
+    total_batches = len(loader)
+    if 0 < subset_ratio < 1.0:
+        # compute how many batches to sample
+        target_batches = max(1, int(total_batches * subset_ratio))
+        # randomly choose batch indices
+        selected_idx = set(random.sample(range(total_batches), target_batches))
+    else:
+        selected_idx = None
+
+    for i, batch in enumerate(loader):
+        if selected_idx is not None and i not in selected_idx:
+            continue
+        batch = {k: v.to(device) for k, v in batch.items()}
+        with autocast_ctx(amp_dtype):
+            out = diffuser(batch)
+            losses.append(out.token_nll.item())
+            tokens += 1
+
+    mean_loss = sum(losses) / max(tokens, 1)
+    ppl = math.exp(mean_loss)
+    return ppl, mean_loss
+
 def infinite_loader(loader):
     while True:
         for batch in loader:
@@ -182,9 +210,11 @@ def main():
         # periodic eval
         if step % eval_interval == 0 or step == max_iters:
             diffuser.eval()
-            ppl, val_loss = evaluate(diffuser, valid_loader, device, amp_dtype)
-            if is_main_process():
-                print0(f"[iter {step}] valid loss={val_loss:.4f}, ppl={ppl:.2f}")
+            subset_ratio = float(cfg["train"].get("eval_subset_ratio", 1.0))
+            print0(f"[INFO] Evaluating on {subset_ratio*100:.1f}% of validation set ...")
+            ppl, val_loss = evaluate(diffuser, valid_loader, device, amp_dtype, subset_ratio=subset_ratio)
+             
+            print0(f"[iter {step}] valid loss={val_loss:.4f}, ppl={ppl:.2f}")
             diffuser.train()
             # save best
             if val_loss < best_val and is_main_process():
