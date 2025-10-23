@@ -22,7 +22,8 @@ def _looks_like_hf_disk(path: str) -> bool:
     return os.path.exists(os.path.join(path, "dataset_info.json")) or os.path.exists(os.path.join(path, "state.json"))
 
 def prepare_or_load_dataset(raw_data_dir: str, cache_dir: str, tokenizer, max_len: int,
-                            text_column: str = "text", num_proc: int = len(os.sched_getaffinity(0))) -> DatasetDict:
+                            text_column: str = "text", num_proc: int = len(os.sched_getaffinity(0)),
+                            insert_special_tokens: bool = False) -> DatasetDict:
     """
     If `cache_dir` has a saved HF DatasetDict, load and return.
     Else, build from raw_data_dir (train.txt/valid.txt or from pre-saved HF dataset),
@@ -55,7 +56,7 @@ def prepare_or_load_dataset(raw_data_dir: str, cache_dir: str, tokenizer, max_le
 
     # 3) Tokenize with map (batched)
     def _map_fn(batch):
-        return tokenizer(batch, text_key=text_column, max_length=max_len, padding=True, truncation=True)
+        return tokenizer(batch, text_key=text_column, max_length=max_len, padding=True, truncation=True, insert_special_tokens=insert_special_tokens)
 
     cols_to_remove = [c for c in dset["train"].column_names if c != text_column]
     tokenized = dset.map(_map_fn, batched=True, num_proc=num_proc, remove_columns=cols_to_remove)

@@ -70,10 +70,10 @@ def main():
                                         tokenizer=tok,
                                         max_len=cfg["model"]["max_len"],
                                         text_column=cfg["data"].get("text_column", "text"),
-                                        num_proc=cfg["data"].get("num_proc", len(os.sched_getaffinity(0))))
+                                        num_proc=cfg["data"].get("num_proc", len(os.sched_getaffinity(0))),
+                                        insert_special_tokens=cfg["data"].get("insert_special_tokens"))
     train_loader, valid_loader, train_sampler, valid_sampler = create_dataloaders(
-        tokenized, batch_size=cfg["train"]["batch_size"], num_workers=cfg["data"].get("num_workers", 8)
-    )
+        tokenized, batch_size=cfg["train"]["batch_size"], num_workers=cfg["data"].get("num_workers", 8))
 
     # Model + diffusion
     model = TransformerDenoiser(

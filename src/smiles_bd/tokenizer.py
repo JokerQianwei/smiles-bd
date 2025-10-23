@@ -34,25 +34,40 @@ class RegexSmilesTokenizer:
         return [m.group(0) for m in self.regex.finditer(s)]
 
     def encode(self, s: str, max_length: Optional[int] = None,
-               padding: bool = False, truncation: bool = True) -> List[int]:
+               padding: bool = False, truncation: bool = True, insert_special_tokens: bool = True) -> List[int]:
         toks = self.tokenize(s)
         ids = [self.vocab.get(t, self.unk_token_id) for t in toks]
-        if max_length is not None:
-            if truncation and len(ids) > max_length:
-                ids = ids[:max_length]
-            if padding and len(ids) < max_length:
-                ids = ids + [self.pad_token_id] * (max_length - len(ids))
+
+        if insert_special_tokens:
+           # 预留两个位置给 BOS/EOS
+            if max_length is not None: inner_max = max(0, max_length - 2)
+            else: inner_max = None
+        else:
+            inner_max = max_length
+
+        # 截断主体
+        if inner_max is not None and truncation and len(ids) > inner_max:
+            ids = ids[:inner_max]
+
+        # 插入 BOS / EOS
+        if insert_special_tokens:
+            ids = [self.bos_token_id] + ids + [self.eos_token_id]
+
+        # padding 到 max_length
+        if max_length is not None and padding and len(ids) < max_length:
+            ids = ids + [self.pad_token_id] * (max_length - len(ids))
         return ids
 
     def batch_encode(self, texts: Iterable[str], max_length: Optional[int],
-                     padding: bool, truncation: bool) -> List[List[int]]:
-        return [self.encode(t, max_length=max_length, padding=padding, truncation=truncation) for t in texts]
+                     padding: bool, truncation: bool, insert_special_tokens: bool = True) -> List[List[int]]:
+        return [self.encode( t, max_length=max_length, padding=padding, truncation=truncation,insert_special_tokens=insert_special_tokens)
+                for t in texts]
 
     def __call__(self, batch: Dict[str, Any], text_key: str = "text",
-                 max_length: Optional[int] = None, padding: bool = True, truncation: bool = True) -> Dict[str, Any]:
+                 max_length: Optional[int] = None, padding: bool = True, truncation: bool = True, insert_special_tokens: bool = True) -> Dict[str, Any]:
         # Adapter for datasets.map(batched=True)
         texts = batch[text_key]
-        ids_batch = self.batch_encode(texts, max_length=max_length, padding=padding, truncation=truncation)
+        ids_batch = self.batch_encode(texts, max_length=max_length, padding=padding, truncation=truncation, insert_special_tokens=insert_special_tokens)
         attn = [[0 if i == self.pad_token_id else 1 for i in ids] for ids in ids_batch]
         return {"input_ids": ids_batch, "attention_mask": attn}
 
