@@ -23,6 +23,8 @@ class RegexSmilesTokenizer:
         self.mask_token_id = self.vocab.get("[MASK]")
         self.sep_token_id = self.vocab.get("[SEP]")
         self.unk_token_id = self.vocab.get("[UNK]")
+        self.bos_token_id = self.vocab.get("[BOS]")
+        self.eos_token_id = self.vocab.get("[EOS]")
 
     @property
     def vocab_size(self) -> int:
