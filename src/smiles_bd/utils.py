@@ -1,5 +1,5 @@
 
-import os, json, contextlib
+import os, contextlib, math
 from typing import Any, Dict, Optional
 import torch
 import torch.distributed as dist
@@ -109,3 +109,10 @@ def print0(s="",**kwargs):
     ddp_rank = int(os.environ.get('RANK', 0))
     if ddp_rank == 0:
         print(s, **kwargs)
+
+
+def print_one_epoch_stpes(tokenized, cfg):
+    dataset_size = len(tokenized["train"])
+    batch_size = cfg["train"]["batch_size"]
+    steps_per_epoch = (dataset_size + batch_size - 1) // batch_size
+    print0(f"[INFO] Training set size: {dataset_size}; Batch size: {batch_size}; => One epoch ≈ {steps_per_epoch} steps")

@@ -15,7 +15,7 @@ from .diffusion import MaskedDiffusion
 from .data import prepare_or_load_dataset, create_dataloaders
 from .checkpoint import pack_state, save_checkpoint, load_checkpoint
 from .utils import (set_seed, set_torch_backends, distributed_init, is_distributed, is_main_process,
-                    get_amp_dtype, autocast_ctx, all_reduce_sum, count_parameters, print0)
+                    get_amp_dtype, autocast_ctx, all_reduce_sum, count_parameters, print0, print_one_epoch_stpes)
 
 @torch.no_grad()
 def evaluate(diffuser, loader, device, amp_dtype):
@@ -76,6 +76,8 @@ def main():
     train_loader, valid_loader, train_sampler, valid_sampler = create_dataloaders(
         tokenized, batch_size=cfg["train"]["batch_size"], num_workers=cfg["data"].get("num_workers", 8))
 
+    print_one_epoch_stpes(tokenized, cfg)
+
     # Model + diffusion
     model = TransformerDenoiser(
         vocab_size=tok.vocab_size, max_len=cfg["model"]["max_len"],
@@ -91,7 +93,7 @@ def main():
 
     if is_main_process():
         total_params, trainable_params = count_parameters(diffuser)
-        print0(f"Params: total {total_params/1e6:.2f}M, trainable {trainable_params/1e6:.2f}M")
+        print0(f"[INFO] Params: total {total_params/1e6:.2f}M, trainable {trainable_params/1e6:.2f}M")
 
     # Compile for speed (optional)
     if cfg["train"].get("compile", False) and hasattr(torch, "compile"):
