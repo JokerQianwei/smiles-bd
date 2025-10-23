@@ -5,6 +5,7 @@ import torch.optim as optim
 from torch.nn.utils import clip_grad_norm_
 from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
+import datetime
 
 from .config import load_config, merge_cli_overrides
 from .tokenizer import RegexSmilesTokenizer
@@ -133,9 +134,11 @@ def main():
     log_interval   = int(cfg["train"].get("log_interval", 10))
     eval_interval  = int(cfg["train"].get("eval_interval", 1000))
     save_interval  = int(cfg["train"].get("save_interval", 1000))
-    save_dir       = cfg["paths"]["save_dir"]
 
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    save_dir = os.path.join(cfg["paths"]["save_dir"], timestamp)
     os.makedirs(save_dir, exist_ok=True)
+    print0(f"Checkpoints will be saved under: {save_dir}")
 
     if is_distributed() and train_sampler is not None:
         train_sampler.set_epoch(0)

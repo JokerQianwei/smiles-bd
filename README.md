@@ -28,7 +28,7 @@ python -m smiles_bd.train \
 # Resume
 python -m smiles_bd.train \
   --config configs/default.yaml --data_dir ... --cache_dir ... \
-  --vocab_path ./vocab.txt --resume checkpoints/iter_0002000.pt
+  --resume checkpoints/iter_0002000.pt
 ```
 
 ### Data directory
