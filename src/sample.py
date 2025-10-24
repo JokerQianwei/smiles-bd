@@ -4,7 +4,8 @@ from tokenizer import RegexSmilesTokenizer
 from model import TransformerDenoiser
 from schedule import ClippedLinearSchedule
 from diffusion import MaskedDiffusion
-from utils import load_checkpoint, set_torch_backends, get_amp_dtype, autocast_ctx
+from utils import set_torch_backends, get_amp_dtype, autocast_ctx
+from checkpoint import load_checkpoint
 
 def parse_args():
     ap = argparse.ArgumentParser("Prefix-conditional sampling for SMILES clusters.")
@@ -41,7 +42,10 @@ def main():
         max_len=cfg["model"]["max_len"]
     ).to(device)
 
-    load_checkpoint(diffuser, args.ckpt, map_location=device)
+    #  加载ckpt，只取模型权重
+    payload = load_checkpoint(args.ckpt, map_location=device)
+    getattr(diffuser, "module", diffuser).load_state_dict(payload["model"], strict=True)
+
     diffuser.eval()
 
     prefix_ids = torch.tensor(

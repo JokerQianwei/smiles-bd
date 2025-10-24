@@ -1,11 +1,10 @@
-import argparse, os, math
+import argparse, os, math, datetime
 from typing import Dict, Any
 import torch
 import torch.optim as optim
 from torch.nn.utils import clip_grad_norm_
 from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
-import datetime
 
 from config import load_config, merge_cli_overrides
 from tokenizer import RegexSmilesTokenizer
@@ -14,8 +13,10 @@ from schedule import ClippedLinearSchedule
 from diffusion import MaskedDiffusion
 from data import prepare_or_load_dataset, create_dataloaders
 from checkpoint import pack_state, save_checkpoint, load_checkpoint
-from utils import (set_seed, set_torch_backends, distributed_init, is_distributed, is_main_process,
-                    get_amp_dtype, autocast_ctx, all_reduce_sum, count_parameters, print0, print_one_epoch_stpes)
+from utils import (
+    set_seed, set_torch_backends, distributed_init, is_distributed, is_main_process,
+    get_amp_dtype, autocast_ctx, all_reduce_sum, count_parameters, print0, print_one_epoch_stpes
+)
 
 @torch.no_grad()
 def evaluate(diffuser, loader, device, amp_dtype, subset_ratio: float = 1.0):
@@ -26,9 +27,7 @@ def evaluate(diffuser, loader, device, amp_dtype, subset_ratio: float = 1.0):
     losses, tokens = [], 0
     total_batches = len(loader)
     if 0 < subset_ratio < 1.0:
-        # compute how many batches to sample
         target_batches = max(1, int(total_batches * subset_ratio))
-        # randomly choose batch indices
         selected_idx = set(random.sample(range(total_batches), target_batches))
     else:
         selected_idx = None
@@ -71,22 +70,26 @@ def main():
     distributed_init()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     set_seed(cfg["train"].get("seed", 1337))
-    
-    # 设置后端（进程级）：TF32 + SDPA 内核
-    set_torch_backends(cfg["train"].get("tf32", True), cfg["model"].get("sdpa_backend", "auto"))
 
+    # 进程级后端设置：TF32 + SDPA
+    set_torch_backends(cfg["train"].get("tf32", True), cfg["model"].get("sdpa_backend", "auto"))
 
     # Tokenizer + datasets
     tok = RegexSmilesTokenizer(cfg["paths"]["vocab_path"])
-    tokenized = prepare_or_load_dataset(raw_data_dir=cfg["paths"]["data_dir"],
-                                        cache_dir=cfg["paths"]["cache_dir"],
-                                        tokenizer=tok,
-                                        max_len=cfg["model"]["max_len"],
-                                        text_column=cfg["data"].get("text_column", "text"),
-                                        num_proc=cfg["data"].get("num_proc", len(os.sched_getaffinity(0))),
-                                        insert_special_tokens=cfg["data"].get("insert_special_tokens"))
+    tokenized = prepare_or_load_dataset(
+        raw_data_dir=cfg["paths"]["data_dir"],
+        cache_dir=cfg["paths"]["cache_dir"],
+        tokenizer=tok,
+        max_len=cfg["model"]["max_len"],
+        text_column=cfg["data"].get("text_column", "text"),
+        num_proc=cfg["data"].get("num_proc", len(os.sched_getaffinity(0))),
+        insert_special_tokens=cfg["data"].get("insert_special_tokens"),
+    )
     train_loader, valid_loader, train_sampler, valid_sampler = create_dataloaders(
-        tokenized, batch_size=cfg["train"]["batch_size"], num_workers=cfg["data"].get("num_workers", 8))
+        tokenized,
+        batch_size=cfg["train"]["batch_size"],
+        num_workers=cfg["data"].get("num_workers", 8)
+    )
 
     print_one_epoch_stpes(tokenized, cfg)
 
@@ -97,21 +100,38 @@ def main():
         n_layers=cfg["model"]["n_layers"], dropout=cfg["model"].get("dropout", 0.1)
     ).to(device)
     schedule = ClippedLinearSchedule(beta=cfg["train"]["beta"], omega=cfg["train"]["omega"])
-    diffuser = MaskedDiffusion(model, tok, schedule,
-                               pad_token_id=tok.pad_token_id,
-                               mask_token_id=tok.mask_token_id,
-                               sep_token_id=tok.sep_token_id,
-                               max_len=cfg["model"]["max_len"]).to(device)
+    diffuser = MaskedDiffusion(
+        model, tok, schedule,
+        pad_token_id=tok.pad_token_id,
+        mask_token_id=tok.mask_token_id,
+        sep_token_id=tok.sep_token_id,
+        max_len=cfg["model"]["max_len"]
+    ).to(device)
 
     if is_main_process():
         total_params, trainable_params = count_parameters(diffuser)
         print0(f"[INFO] Params: total {total_params/1e6:.2f}M, trainable {trainable_params/1e6:.2f}M")
 
-    # Compile for speed (optional)
+    # -------- Resume（第一阶段）：先加载“模型权重”，此时尚未 compile / DDP --------
+    start_step = 0
+    best_val = float("inf")
+    resume_payload = None
+    if args.resume and os.path.isfile(args.resume):
+        ckpt = load_checkpoint(args.resume, map_location="cpu")
+        sd = ckpt.get("model")
+        if sd is None:
+            raise RuntimeError("Resume expects latest rich checkpoint with top-level 'model'.")
+        getattr(diffuser, "module", diffuser).load_state_dict(sd, strict=True)
+        start_step = int(ckpt.get("step", 0))
+        best_val = float(ckpt.get("best_val_loss", float("inf")))
+        resume_payload = ckpt  # 稍后再恢复 optimizer/scaler
+        print0(f"Resumed model weights from {args.resume} at step={start_step}, best_val={best_val:.4f}")
+
+    # （可选）编译：在加载完权重之后，再进行 torch.compile
     if cfg["train"].get("compile", False) and hasattr(torch, "compile"):
         diffuser = torch.compile(diffuser, mode=cfg["train"].get("compile_mode", "reduce-overhead"))
 
-    # DDP
+    # DDP：放在 compile 之后
     if is_distributed():
         local_rank = int(os.environ.get("LOCAL_RANK", 0))
         diffuser = DDP(diffuser, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False)
@@ -126,21 +146,12 @@ def main():
     amp_dtype = get_amp_dtype(cfg["train"].get("amp", "auto"))
     scaler = torch.amp.GradScaler("cuda", enabled=(amp_dtype == torch.float16))
 
-    # Resume
-    start_step = 0
-    best_val = float("inf")
-    if args.resume and os.path.isfile(args.resume):
-        ckpt = load_checkpoint(args.resume, map_location="cpu")
-        sd = ckpt.get("model", ckpt.get("state_dict", None))
-        if sd is not None:
-            getattr(diffuser, "module", diffuser).load_state_dict(sd)
-        if ckpt.get("optimizer"):
-            optimizer.load_state_dict(ckpt["optimizer"])
-        if ckpt.get("scaler"):
-            scaler.load_state_dict(ckpt["scaler"])
-        start_step = int(ckpt.get("step", 0))
-        best_val = float(ckpt.get("best_val_loss", float("inf")))
-        print0(f"Resumed from {args.resume} at step={start_step}, best_val={best_val:.4f}")
+    # -------- Resume（第二阶段）：现在已创建 optimizer/scaler，恢复其状态 --------
+    if resume_payload is not None:
+        if resume_payload.get("optimizer"):
+            optimizer.load_state_dict(resume_payload["optimizer"])
+        if resume_payload.get("scaler"):
+            scaler.load_state_dict(resume_payload["scaler"])
 
     # Training schedule
     max_iters      = int(cfg["train"]["max_iters"])
@@ -197,7 +208,6 @@ def main():
             subset_ratio = float(cfg["train"].get("eval_subset_ratio", 1.0))
             print0(f"[INFO] Evaluating on {subset_ratio*100:.1f}% of validation set ...")
             ppl, val_loss = evaluate(diffuser, valid_loader, device, amp_dtype, subset_ratio=subset_ratio)
-             
             print0(f"[iter {step}] valid loss={val_loss:.4f}, ppl={ppl:.2f}")
             diffuser.train()
             # save best

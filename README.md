@@ -14,7 +14,8 @@ split by **[SEP]** (new convention).
 ## Quickstart
 ```bash
 # One-time preprocess -> cache, then train
-python src/train.py --config configs/default.yaml --data_dir /data/yqw/smiles-bd/data/DrugLikeSMILSE-debug --cache_dir /data/yqw/smiles-bd/cache/DrugLikeSMILSE-debug --override model.max_len=66 train.batch_size=32
+python src/train.py --config configs/default.yaml --data_dir /data/yqw/smiles-bd/data/DrugLikeSMILSE-debug --cache_dir /data/yqw/smiles-bd/cache/DrugLikeSMILSE-debug \
+--override model.max_len=66 train.batch_size=32 model.d_model=768 
 
 # Multi-GPU (4 GPUs)
 torchrun --standalone --nproc_per_node=4 src/train.py   --config configs/default.yaml \
@@ -25,7 +26,7 @@ torchrun --standalone --nproc_per_node=4 src/train.py   --config configs/default
 # Resume
 python src/train.py \
   --config configs/default.yaml \
-  --resume checkpoints/2025-10-24_12-47-28/iter_0001000.pt \
+  --resume /data/yqw/smiles-bd/checkpoints/2025-10-24_16-05-43/iter_0000500.pt \
    --data_dir /data/yqw/smiles-bd/data/DrugLikeSMILSE-debug \
    --cache_dir /data/yqw/smiles-bd/cache/DrugLikeSMILSE-debug \
    --override model.max_len=66 train.batch_size=100
@@ -37,7 +38,7 @@ torchrun --standalone --nproc_per_node=2 src/train.py \
 
 ### Sampling
 python src/sample.py  --config configs/default.yaml \
-  --ckpt checkpoints/2025-10-24_12-47-28/iter_0001000.pt \
+  --ckpt /data/yqw/smiles-bd/checkpoints/2025-10-24_16-05-43/best_model.pt \
   --prefix "" --override sample.steps=24 sample.top_p=0.9
 ```
 
