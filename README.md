@@ -26,7 +26,7 @@ torchrun --standalone --nproc_per_node=4 src/train.py   --config configs/default
 # Resume
 python src/train.py \
   --config configs/default.yaml \
-  --resume /data/yqw/smiles-bd/checkpoints/2025-10-24_16-05-43/iter_0000500.pt \
+  --resume /data/yqw/smiles-bd/checkpoints/2025-10-24_19-16-51/best_model.pt \
    --data_dir /data/yqw/smiles-bd/data/DrugLikeSMILSE-debug \
    --cache_dir /data/yqw/smiles-bd/cache/DrugLikeSMILSE-debug \
    --override model.max_len=66 train.batch_size=100

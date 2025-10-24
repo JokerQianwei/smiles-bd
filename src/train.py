@@ -162,7 +162,6 @@ def main():
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     save_dir = os.path.join(cfg["paths"]["save_dir"], timestamp)
     os.makedirs(save_dir, exist_ok=True)
-    print0(f"Checkpoints will be saved under: {save_dir}")
 
     # 估算每 epoch 的 step，用于 DistributedSampler.set_epoch()
     steps_per_epoch = (len(tokenized["train"]) + cfg["train"]["batch_size"] - 1) // cfg["train"]["batch_size"]
