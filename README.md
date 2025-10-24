@@ -1,6 +1,6 @@
 # SMILES Block Diffusion (distributed v6)
 
-Minimal, production-ready codebase for **full-sequence MDLM/SUBS** training on concatenated SMILES (length=1024),
+Minimal, production-ready codebase for **full-sequence MDLM/SUBS** training on concatenated SMILES,
 with **single-node multi-GPU** training (DDP), **AMP (bf16/fp16)**, and **prefix-frozen sampling**. Segments are
 split by **[SEP]** (new convention).
 
@@ -13,23 +13,34 @@ split by **[SEP]** (new convention).
 
 ## Quickstart
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-```bash
 # One-time preprocess -> cache, then train
-python -m smiles_bd.train \
-  --config configs/default.yaml \
-  --data_dir /data/yqw/smiles-bd/data/DrugLikeSMILSE-debug \
-  --cache_dir /data/yqw/smiles-bd/cache/DrugLikeSMILSE-debug \
-  --override model.max_len=65 train.batch_size=32
+python src/train.py --config configs/default.yaml --data_dir /data/yqw/smiles-bd/data/DrugLikeSMILSE-debug --cache_dir /data/yqw/smiles-bd/cache/DrugLikeSMILSE-debug --override model.max_len=66 train.batch_size=32
+
+# Multi-GPU (4 GPUs)
+torchrun --standalone --nproc_per_node=4 src/train.py   --config configs/default.yaml \
+   --data_dir /data/yqw/smiles-bd/data/DrugLikeSMILSE-debug \
+   --cache_dir /data/yqw/smiles-bd/cache/DrugLikeSMILSE-debug \
+   --override model.max_len=66 train.batch_size=100
 
 # Resume
-python -m smiles_bd.train \
-  --config configs/default.yaml --data_dir ... --cache_dir ... \
-  --resume checkpoints/iter_0002000.pt
+python src/train.py \
+  --config configs/default.yaml \
+  --resume checkpoints/2025-10-24_12-47-28/iter_0001000.pt \
+   --data_dir /data/yqw/smiles-bd/data/DrugLikeSMILSE-debug \
+   --cache_dir /data/yqw/smiles-bd/cache/DrugLikeSMILSE-debug \
+   --override model.max_len=66 train.batch_size=100
+
+# Specific GPU
+CUDA_VISIBLE_DEVICES=1,3 \
+torchrun --standalone --nproc_per_node=2 src/train.py \
+  --config configs/default.yaml
+
+### Sampling
+python src/sample.py  --config configs/default.yaml \
+  --ckpt checkpoints/2025-10-24_12-47-28/iter_0001000.pt \
+  --prefix "" --override sample.steps=24 sample.top_p=0.9
 ```
+
 
 ### Data directory
 - **Text**: `data_dir/train.txt` and `data_dir/valid.txt`, one SMILES per line.
@@ -49,30 +60,6 @@ Each `.pt` contains:
 ```
 The best model is continuously written to `checkpoints/best_model.pt`.
 
-
-### Single GPU smoke
-```bash
-python -m smiles_bd.train --config configs/default.yaml  --override model.max_len=65  
-```
-
-### Multi-GPU (4 GPUs)
-```bash
-torchrun --standalone --nproc_per_node=4 -m smiles_bd.train --config configs/default.yaml   --override model.max_len=64 
-```
-
-### 指定特定的GPU
-```bash
-CUDA_VISIBLE_DEVICES=1,3 \
-torchrun --standalone --nproc_per_node=2 \
-  -m smiles_bd.train \
-  --config configs/train_full.yaml \
-  --override train.batch_size=2 train.grad_accum_steps=8
-```
-
-### Sampling
-```bash
-python -m smiles_bd.sample --ckpt checkpoints/model.pt   --config configs/default.yaml   --prefix "C1=CC=CC=C1[SEP]"   --override sample.steps=24 sample.top_p=0.9
-```
 
 ## Data Contract
 - Each line: `SMILES_A[SEP]SMILES_A'[SEP]...` and **right-padded with [PAD]** to the fixed `model.max_len` (e.g., 1024).
@@ -109,52 +96,7 @@ python -m smiles_bd.sample --ckpt checkpoints/model.pt   --config configs/defaul
 
 > 这份代码是**工程化的最小骨架**：Torch 原生实现，只有 4 个核心文件（Tokenizer / Schedule / Transformer Denoiser / Diffusion 训练&采样），便于直接集成到现有化学工作流中。
 
-## 目录
-```
-.
-├─ configs/default.yaml
-├─ examples/
-│  └─ toy_data/         # 64 长度玩具样本
-├─ src/smiles_bd/
-│  ├─ tokenizer.py
-│  ├─ schedule.py
-│  ├─ model.py
-│  ├─ diffusion.py
-│  ├─ data.py
-│  ├─ config.py
-│  ├─ utils.py
-│  ├─ train.py
-│  └─ sample.py
-├─ tests/
-│  ├─ test_tokenizer.py
-│  ├─ test_dataset.py
-│  ├─ test_training_and_sampling.py
-│  └─ test_train_loop_smoke.py
-├─ pyproject.toml
-├─ requirements.txt
-└─ pytest.ini
-```
 
-## 安装
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-pip install -e .   # 可选，支持 `python -m smiles_bd.train`
-```
-
-## 数据格式（提前处理）
-- 每行：`SMI_A[SEP]SMI_A'[SEP]...`，尾部用 `[PAD]` 补到 **1024**；
-- **不自动注入**任何 special token；**不 wrap/不切块**；
-- `attention_mask`==1 仅在非 `[PAD]` 处。
-
-## 训练
-```bash
-python -m smiles_bd.train --config ./configs/default.yaml \
-  --override paths.train_path=/abs/train.txt \
-             paths.valid_path=/abs/valid.txt \
-             paths.vocab_path=/abs/vocab.txt \
-             model.max_len=1024 train.epochs=10 train.batch_size=8
-```
 - 遮罩率：`U[β,ω]`（默认 `0.3~0.8`），降低梯度方差（§5）；  
 - 目标：只在被遮蔽位计交叉熵，并乘 \( \alpha′(t)/(1-α_t) \)（附录 B.3，式(19)）。
 - Checkpoint 会附带 `meta`（形状等），采样端自动匹配。

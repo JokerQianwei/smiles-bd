@@ -7,34 +7,17 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from tqdm import tqdm
 import datetime
 
-from .config import load_config, merge_cli_overrides
-from .tokenizer import RegexSmilesTokenizer
-from .model import TransformerDenoiser
-from .schedule import ClippedLinearSchedule
-from .diffusion import MaskedDiffusion
-from .data import prepare_or_load_dataset, create_dataloaders
-from .checkpoint import pack_state, save_checkpoint, load_checkpoint
-from .utils import (set_seed, set_torch_backends, distributed_init, is_distributed, is_main_process,
+from config import load_config, merge_cli_overrides
+from tokenizer import RegexSmilesTokenizer
+from model import TransformerDenoiser
+from schedule import ClippedLinearSchedule
+from diffusion import MaskedDiffusion
+from data import prepare_or_load_dataset, create_dataloaders
+from checkpoint import pack_state, save_checkpoint, load_checkpoint
+from utils import (set_seed, set_torch_backends, distributed_init, is_distributed, is_main_process,
                     get_amp_dtype, autocast_ctx, all_reduce_sum, count_parameters, print0, print_one_epoch_stpes)
 
 @torch.no_grad()
-def evaluate(diffuser, loader, device, amp_dtype):
-    tot_nll = torch.zeros(1, device=device)
-    tot_mask = torch.zeros(1, device=device)
-    if is_main_process():
-        loader = tqdm(loader, desc="valid")
-    for batch in loader:
-        batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
-        with autocast_ctx(amp_dtype):
-            out = diffuser(batch)
-        tot_nll += out.token_nll * out.num_masked
-        tot_mask += out.num_masked.float()
-    tot_nll = all_reduce_sum(tot_nll)
-    tot_mask = all_reduce_sum(tot_mask)
-    mean_nll = (tot_nll / torch.clamp_min(tot_mask, 1)).item()
-    ppl = math.exp(mean_nll) if mean_nll < 30 else float("inf")
-    return ppl, mean_nll
-
 def evaluate(diffuser, loader, device, amp_dtype, subset_ratio: float = 1.0):
     """
     Evaluate validation loss. If subset_ratio < 1, randomly sample that fraction of the validation set.
@@ -89,7 +72,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     set_seed(cfg["train"].get("seed", 1337))
     
-    set_torch_backends(cfg["train"].get("tf32", True), cfg["train"].get("sdpa_backend", "auto"))
+    # 设置后端（进程级）：TF32 + SDPA 内核
+    set_torch_backends(cfg["train"].get("tf32", True), cfg["model"].get("sdpa_backend", "auto"))
 
 
     # Tokenizer + datasets
@@ -140,7 +124,7 @@ def main():
 
     # AMP dtype
     amp_dtype = get_amp_dtype(cfg["train"].get("amp", "auto"))
-    scaler = torch.cuda.amp.GradScaler(enabled=(amp_dtype == torch.float16))
+    scaler = torch.amp.GradScaler("cuda", enabled=(amp_dtype == torch.float16))
 
     # Resume
     start_step = 0

@@ -1,6 +1,6 @@
 import pyarrow as pa
 import pyarrow.ipc as ipc
-from smiles_bd.tokenizer import RegexSmilesTokenizer
+from tokenizer import RegexSmilesTokenizer
 import numpy as np
 tok = RegexSmilesTokenizer("vocab.txt")
 

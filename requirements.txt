@@ -1,6 +1,0 @@
-torch
-datasets>=2.14.0
-pyarrow>=11.0.0
-tqdm
-yamlargparse
-pyyaml

@@ -1,0 +1,13 @@
+name: smiles-bd
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pytorch=2.5.*
+  - pytorch-cuda=12.1        # CPU-only: remove this line
+  - pyarrow>=11
+  - datasets>=2.14
+  - tqdm
+  - pyyaml
