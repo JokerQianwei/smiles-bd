@@ -35,7 +35,6 @@ train:
 
   # iteration-based control
   max_iters: 10000
-  log_interval: 10
   eval_interval: 500
   save_interval: 500
 

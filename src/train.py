@@ -15,35 +15,35 @@ from data import prepare_or_load_dataset, create_dataloaders
 from checkpoint import pack_state, save_checkpoint, load_checkpoint
 from utils import (
     set_seed, set_torch_backends, distributed_init, is_distributed, is_main_process,
-    get_amp_dtype, autocast_ctx, all_reduce_sum, count_parameters, print0, print_one_epoch_stpes
+    get_amp_dtype, autocast_ctx, all_reduce_sum, all_reduce_mean_float,
+    count_parameters, print0, print_one_epoch_stpes
 )
 
 @torch.no_grad()
 def evaluate(diffuser, loader, device, amp_dtype, subset_ratio: float = 1.0):
+    """ Evaluate validation loss deterministically. 0.0 < subset_ratio < 1.0: 取前 subset_ratio 比例的批次（向上取整，至少 1 批）
     """
-    Evaluate validation loss. If subset_ratio < 1, randomly sample that fraction of the validation set.
-    """
-    import random
-    losses, tokens = [], 0
     total_batches = len(loader)
-    if 0 < subset_ratio < 1.0:
-        target_batches = max(1, int(total_batches * subset_ratio))
-        selected_idx = set(random.sample(range(total_batches), target_batches))
-    else:
-        selected_idx = None
+    if subset_ratio <= 0.0 or total_batches == 0:
+        return float("nan"), float("nan")
+    target_batches = total_batches if subset_ratio >= 1.0 else max(1, int(math.ceil(total_batches * subset_ratio)))
 
+    losses, count = [], 0
     for i, batch in enumerate(loader):
-        if selected_idx is not None and i not in selected_idx:
-            continue
+        if i >= target_batches:
+            break
         batch = {k: v.to(device) for k, v in batch.items()}
         with autocast_ctx(amp_dtype):
             out = diffuser(batch)
             losses.append(out.token_nll.item())
-            tokens += 1
+            count += 1
 
-    mean_loss = sum(losses) / max(tokens, 1)
-    ppl = math.exp(mean_loss)
+    mean_loss_local = (sum(losses) / max(count, 1)) if count > 0 else float("nan")
+    mean_loss = all_reduce_mean_float(mean_loss_local) if not math.isnan(mean_loss_local) else mean_loss_local
+    ppl = math.exp(mean_loss) if not math.isnan(mean_loss) else float("nan")
     return ppl, mean_loss
+
+
 
 def infinite_loader(loader):
     while True:
@@ -156,7 +156,6 @@ def main():
     # Training schedule
     max_iters      = int(cfg["train"]["max_iters"])
     grad_accum     = int(cfg["train"].get("grad_accum_steps", 1))
-    log_interval   = int(cfg["train"].get("log_interval", 10))
     eval_interval  = int(cfg["train"].get("eval_interval", 1000))
     save_interval  = int(cfg["train"].get("save_interval", 1000))
 
@@ -165,6 +164,8 @@ def main():
     os.makedirs(save_dir, exist_ok=True)
     print0(f"Checkpoints will be saved under: {save_dir}")
 
+    # 估算每 epoch 的 step，用于 DistributedSampler.set_epoch()
+    steps_per_epoch = (len(tokenized["train"]) + cfg["train"]["batch_size"] - 1) // cfg["train"]["batch_size"]
     if is_distributed() and train_sampler is not None:
         train_sampler.set_epoch(0)
 
@@ -176,8 +177,9 @@ def main():
     while step < max_iters:
         optimizer.zero_grad(set_to_none=True)
         for _ in range(grad_accum):
-            if is_distributed() and train_sampler is not None and (step % 1000 == 0):
-                train_sampler.set_epoch(step)
+            if is_distributed() and train_sampler is not None and steps_per_epoch > 0:
+                if step % steps_per_epoch == 0:
+                    train_sampler.set_epoch(step // max(steps_per_epoch, 1))
             batch = next(iter_loader)
             batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
             with autocast_ctx(amp_dtype):
@@ -198,8 +200,8 @@ def main():
             optimizer.step()
 
         step += 1
-        if is_main_process() and step % log_interval == 0:
-            progress.update(log_interval)
+        if is_main_process():
+            progress.update(1)
             progress.set_postfix(step=step, loss=float(out.loss))
 
         # periodic eval

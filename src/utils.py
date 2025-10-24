@@ -116,3 +116,9 @@ def print_one_epoch_stpes(tokenized, cfg):
     batch_size = cfg["train"]["batch_size"]
     steps_per_epoch = (dataset_size + batch_size - 1) // batch_size
     print0(f"[INFO] Training set size: {dataset_size}; Batch size: {batch_size}; => One epoch ≈ {steps_per_epoch} steps")
+
+def all_reduce_mean_float(value: float) -> float:
+    t = torch.tensor([value], dtype=torch.float32, device=("cuda" if torch.cuda.is_available() else "cpu"))
+    t = all_reduce_sum(t)
+    world = dist.get_world_size() if is_distributed() else 1
+    return (t / world).item()
