@@ -67,6 +67,14 @@ def main():
     if args.cache_dir:
         cfg.setdefault("paths", {})["cache_dir"] = args.cache_dir
 
+    # Print final config
+    if is_main_process():
+        import yaml
+        print0("="*80)
+        print0("[INFO] Config:")
+        print0(yaml.dump(cfg, indent=2, sort_keys=False))
+        print0("="*80)
+
     distributed_init()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     set_seed(cfg["train"].get("seed", 1337))
