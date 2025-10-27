@@ -38,8 +38,8 @@ torchrun --standalone --nproc_per_node=2 src/train.py \
 
 ### Sampling
 python src/sample.py  --config configs/default.yaml \
-  --ckpt /data/yqw/smiles-bd/checkpoints/2025-10-24_16-05-43/best_model.pt \
-  --prefix "" --override sample.steps=24 sample.top_p=0.9
+  --ckpt checkpoints/2025-10-24_19-18-29/iter_0004500.pt \
+  --prefix "" --override sample.steps=24 sample.top_p=0.9 sample.num_samples=50
 ```
 
 

@@ -38,3 +38,4 @@ train:
 sample:
   steps: 24
   top_p: 0.9
+  num_samples: 1

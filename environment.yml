@@ -11,3 +11,8 @@ dependencies:
   - datasets>=2.14
   - tqdm
   - pyyaml
+  - pandas
+  - rdkit
+  - pip
+  - pip:
+      - PyTDC
