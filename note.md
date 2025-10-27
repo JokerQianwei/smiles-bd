@@ -40,3 +40,14 @@ python -m torch.distributed.run --standalone --nproc_per_node=8 \
 ```
 [INFO] Training set size: 426640404; Batch size: 400; => One epoch ≈ 1066602 steps
 [INFO] Params: total 907.52M, trainable 907.52M
+loss 卡在了 2.5 附近
+
+### 恢复训练，调小学习率
+```bash
+python -m torch.distributed.run --standalone --nproc_per_node=8 \
+   src/train.py   --config configs/default.yaml \
+   --resume /share/home/tm866079609100000/a875465180/yqw_bd3lms/smiles-bd/checkpoints/2025-10-27_09-48-22/iter_0030000.pt \
+   --data_dir /share/home/tm866079609100000/a875465180/yqw_bd3lms/data/DrugLikeSMILSE-12B-427M \
+   --cache_dir /share/home/tm866079609100000/a875465180/yqw_bd3lms/cache/smiles-bd-cache-DrugLikeSMILES-12B-427M\
+   --override model.max_len=66 train.batch_size=400 model.d_model=1536 model.h_heads=24 model.n_layers=32 train.max_iters=1_066_602 train.eval_interval=10000 train.save_interval=5000 train.lr=6e-4
+```
