@@ -16,7 +16,7 @@ model:
   n_layers: 8
   dropout: 0.1
   tie_embeddings: true
-  sdpa_backend: auto    # auto|math|mem_efficient|flash
+  sdpa_backend: auto         # auto|math|mem_efficient|flash
 
 train:
   seed: 1337
@@ -26,14 +26,11 @@ train:
   grad_clip: 1.0
   batch_size: 32
   grad_accum_steps: 1
-  amp: auto             # auto|bf16|fp16|off
-  compile: true         # 图编译  稳定后开（长跑）
+  amp: auto                  # auto|bf16|fp16|off
+  compile: true              # 图编译  稳定后开（长跑）
   compile_mode: reduce-overhead
   tf32: true
   eval_subset_ratio: 0.1
-
-
-  # iteration-based control
   max_iters: 10000
   eval_interval: 500
   save_interval: 500
